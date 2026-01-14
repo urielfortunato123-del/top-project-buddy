@@ -7,19 +7,33 @@ interface SplashScreenProps {
 
 export function SplashScreen({ onComplete }: SplashScreenProps) {
   const [fadeOut, setFadeOut] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
+    // Animate progress bar over 5 seconds
+    const duration = 5000;
+    const interval = 50;
+    const increment = (100 / duration) * interval;
+    
+    const progressTimer = setInterval(() => {
+      setProgress((prev) => {
+        const next = prev + increment;
+        return next >= 100 ? 100 : next;
+      });
+    }, interval);
+
     // Show splash for 5 seconds, then fade out
     const timer = setTimeout(() => {
       setFadeOut(true);
-    }, 5000);
+    }, duration);
 
     // Complete after fade animation
     const completeTimer = setTimeout(() => {
       onComplete();
-    }, 5700);
+    }, duration + 700);
 
     return () => {
+      clearInterval(progressTimer);
       clearTimeout(timer);
       clearTimeout(completeTimer);
     };
@@ -40,19 +54,25 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
         />
       </div>
 
-      {/* Loading indicator */}
-      <div className="flex items-center gap-2 mb-8 animate-fade-in" style={{ animationDelay: "0.5s" }}>
-        <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-        <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-        <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+      {/* Progress bar */}
+      <div 
+        className="w-64 h-1.5 bg-muted rounded-full overflow-hidden mb-6 animate-fade-in"
+        style={{ animationDelay: "0.3s", animationFillMode: "both" }}
+      >
+        <div 
+          className="h-full bg-gradient-to-r from-primary via-primary to-accent rounded-full transition-all duration-100 ease-out"
+          style={{ width: `${progress}%` }}
+        />
       </div>
 
-      {/* Developer credit */}
+      {/* Loading text */}
       <div 
         className="animate-fade-in text-center" 
-        style={{ animationDelay: "0.8s", animationFillMode: "both" }}
+        style={{ animationDelay: "0.5s", animationFillMode: "both" }}
       >
-        <p className="text-sm text-muted-foreground">Carregando...</p>
+        <p className="text-sm text-muted-foreground">
+          Carregando... <span className="font-semibold text-primary">{Math.round(progress)}%</span>
+        </p>
         <p className="text-xs text-muted-foreground/70 mt-4">
           Desenvolvido por <span className="font-semibold text-primary">Uriel da Fonseca Fortunato</span>
         </p>
