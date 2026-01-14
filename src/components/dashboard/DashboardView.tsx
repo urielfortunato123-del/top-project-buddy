@@ -148,9 +148,10 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     }
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     try {
-      exportToExcel({
+      toast({ title: "Gerando Excel...", description: "Aguarde enquanto processamos os dados" });
+      await exportToExcel({
         dataset,
         filters: {
           team: teamFilter,

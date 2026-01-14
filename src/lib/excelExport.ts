@@ -1,5 +1,5 @@
 /* Excel Export utility - Professional styled export with RGB conditional formatting */
-import XLSX from "xlsx-js-style";
+/* Uses dynamic import to avoid bloating the main bundle */
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Dataset } from "./database";
@@ -15,25 +15,29 @@ interface ExportExcelOptions {
   };
 }
 
-// Color definitions for conditional formatting (RGB hex)
+// Color definitions for conditional formatting (ARGB with FF prefix for full opacity)
 const COLORS = {
-  ENTREGUE: { bg: "22C55E", fg: "FFFFFF" },     // Green
-  FOLGA: { bg: "3B82F6", fg: "FFFFFF" },        // Blue  
-  BANCO: { bg: "F59E0B", fg: "000000" },        // Amber
-  VAZIO: { bg: "EF4444", fg: "FFFFFF" },        // Red
-  HEADER: { bg: "1E293B", fg: "FFFFFF" },       // Slate dark
-  TITLE: { bg: "0F172A", fg: "FFFFFF" },        // Slate darker
-  EXCELLENT: { bg: "16A34A", fg: "FFFFFF" },    // Green 600
-  GOOD: { bg: "2563EB", fg: "FFFFFF" },         // Blue 600
-  REGULAR: { bg: "D97706", fg: "FFFFFF" },      // Amber 600
-  CRITICAL: { bg: "DC2626", fg: "FFFFFF" },     // Red 600
+  ENTREGUE: { bg: "FF22C55E", fg: "FFFFFFFF" },     // Green
+  FOLGA: { bg: "FF3B82F6", fg: "FFFFFFFF" },        // Blue  
+  BANCO: { bg: "FFF59E0B", fg: "FF000000" },        // Amber
+  VAZIO: { bg: "FFEF4444", fg: "FFFFFFFF" },        // Red
+  HEADER: { bg: "FF1E293B", fg: "FFFFFFFF" },       // Slate dark
+  TITLE: { bg: "FF0F172A", fg: "FFFFFFFF" },        // Slate darker
+  SUBTITLE: { bg: "FF1E293B", fg: "FF94A3B8" },     // Subtitle gray
+  NAME_COL: { bg: "FFF1F5F9", fg: "FF1E293B" },     // Name column
+  LEGEND: { bg: "FF334155", fg: "FFFFFFFF" },       // Legend
+  EXCELLENT: { bg: "FF16A34A", fg: "FFFFFFFF" },    // Green 600 (>= 80%)
+  GOOD: { bg: "FF2563EB", fg: "FFFFFFFF" },         // Blue 600 (>= 60%)
+  REGULAR: { bg: "FFD97706", fg: "FFFFFFFF" },      // Amber 600 (>= 40%)
+  CRITICAL: { bg: "FFDC2626", fg: "FFFFFFFF" },     // Red 600 (< 40%)
+  BORDER: { rgb: "FFE2E8F0" },
 };
 
-// Cell style type for xlsx
-interface CellStyleDef {
-  fill?: { fgColor?: { rgb: string } };
-  font?: { color?: { rgb: string }; bold?: boolean };
-  alignment?: { horizontal?: string; vertical?: string };
+// Cell style type for xlsx-js-style
+interface CellStyle {
+  fill?: { fgColor?: { rgb: string }; patternType?: string };
+  font?: { color?: { rgb: string }; bold?: boolean; sz?: number };
+  alignment?: { horizontal?: string; vertical?: string; wrapText?: boolean };
   border?: {
     top?: { style: string; color: { rgb: string } };
     bottom?: { style: string; color: { rgb: string } };
@@ -42,22 +46,24 @@ interface CellStyleDef {
   };
 }
 
-// Cell style generator
-function createStyle(bgColor: string, fgColor: string, bold = false, center = true): CellStyleDef {
+// Cell style generator with ARGB colors
+function createStyle(bgColor: string, fgColor: string, bold = false, center = true): CellStyle {
   return {
-    fill: { fgColor: { rgb: bgColor } },
-    font: { color: { rgb: fgColor }, bold },
-    alignment: center ? { horizontal: "center", vertical: "center" } : { vertical: "center" },
+    fill: { fgColor: { rgb: bgColor }, patternType: "solid" },
+    font: { color: { rgb: fgColor }, bold, sz: 11 },
+    alignment: center 
+      ? { horizontal: "center", vertical: "center" } 
+      : { horizontal: "left", vertical: "center" },
     border: {
-      top: { style: "thin", color: { rgb: "E2E8F0" } },
-      bottom: { style: "thin", color: { rgb: "E2E8F0" } },
-      left: { style: "thin", color: { rgb: "E2E8F0" } },
-      right: { style: "thin", color: { rgb: "E2E8F0" } },
+      top: { style: "thin", color: { rgb: COLORS.BORDER.rgb } },
+      bottom: { style: "thin", color: { rgb: COLORS.BORDER.rgb } },
+      left: { style: "thin", color: { rgb: COLORS.BORDER.rgb } },
+      right: { style: "thin", color: { rgb: COLORS.BORDER.rgb } },
     }
   };
 }
 
-function getStatusStyle(status: string): CellStyleDef {
+function getStatusStyle(status: string): CellStyle {
   switch (status) {
     case "ENTREGUE": return createStyle(COLORS.ENTREGUE.bg, COLORS.ENTREGUE.fg, true);
     case "FOLGA": return createStyle(COLORS.FOLGA.bg, COLORS.FOLGA.fg, true);
@@ -66,7 +72,7 @@ function getStatusStyle(status: string): CellStyleDef {
   }
 }
 
-function getEvaluationStyle(taxa: number): CellStyleDef {
+function getEvaluationStyle(taxa: number): CellStyle {
   if (taxa >= 80) return createStyle(COLORS.EXCELLENT.bg, COLORS.EXCELLENT.fg, true);
   if (taxa >= 60) return createStyle(COLORS.GOOD.bg, COLORS.GOOD.fg, true);
   if (taxa >= 40) return createStyle(COLORS.REGULAR.bg, COLORS.REGULAR.fg, true);
@@ -95,23 +101,28 @@ function statusToChip(status: string): string {
 // Helper to convert column index to Excel letter (0 = A, 1 = B, etc.)
 function colToLetter(col: number): string {
   let letter = "";
-  while (col >= 0) {
-    letter = String.fromCharCode((col % 26) + 65) + letter;
-    col = Math.floor(col / 26) - 1;
+  let c = col;
+  while (c >= 0) {
+    letter = String.fromCharCode((c % 26) + 65) + letter;
+    c = Math.floor(c / 26) - 1;
   }
   return letter;
 }
 
-// Apply styles to a cell
-function applyCellStyle(ws: XLSX.WorkSheet, row: number, col: number, style: CellStyleDef): void {
+// Apply styles to a cell - type any because XLSX is dynamically imported
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyCellStyle(ws: any, row: number, col: number, style: CellStyle): void {
   const cellRef = colToLetter(col) + (row + 1);
   if (ws[cellRef]) {
     ws[cellRef].s = style;
   }
 }
 
-export function exportToExcel(options: ExportExcelOptions): void {
+export async function exportToExcel(options: ExportExcelOptions): Promise<void> {
   const { dataset, filters } = options;
+  
+  // Dynamic import to avoid bloating main bundle
+  const XLSX = await import("xlsx-js-style");
   
   // Apply filters
   let rows = dataset.rows;
@@ -201,8 +212,8 @@ export function exportToExcel(options: ExportExcelOptions): void {
   // Style title rows
   for (let col = 0; col <= days.length; col++) {
     applyCellStyle(wsMatrix, 0, col, createStyle(COLORS.TITLE.bg, COLORS.TITLE.fg, true, false));
-    applyCellStyle(wsMatrix, 1, col, createStyle("1E293B", "94A3B8", false, false));
-    applyCellStyle(wsMatrix, 2, col, createStyle("1E293B", "94A3B8", false, false));
+    applyCellStyle(wsMatrix, 1, col, createStyle(COLORS.SUBTITLE.bg, COLORS.SUBTITLE.fg, false, false));
+    applyCellStyle(wsMatrix, 2, col, createStyle(COLORS.SUBTITLE.bg, COLORS.SUBTITLE.fg, false, false));
   }
   
   // Style header row
@@ -215,7 +226,7 @@ export function exportToExcel(options: ExportExcelOptions): void {
     const excelRow = DATA_START_ROW + personIdx;
     
     // Style person name column
-    applyCellStyle(wsMatrix, excelRow, 0, createStyle("F1F5F9", "1E293B", true, false));
+    applyCellStyle(wsMatrix, excelRow, 0, createStyle(COLORS.NAME_COL.bg, COLORS.NAME_COL.fg, true, false));
     
     // Style each day cell with status color
     for (let dayIdx = 0; dayIdx < days.length; dayIdx++) {
@@ -227,18 +238,14 @@ export function exportToExcel(options: ExportExcelOptions): void {
   
   // Style legend row
   const legendRow = DATA_START_ROW + people.length + 1;
-  applyCellStyle(wsMatrix, legendRow, 0, createStyle("334155", "FFFFFF", true, false));
+  applyCellStyle(wsMatrix, legendRow, 0, createStyle(COLORS.LEGEND.bg, COLORS.LEGEND.fg, true, false));
   applyCellStyle(wsMatrix, legendRow, 1, createStyle(COLORS.ENTREGUE.bg, COLORS.ENTREGUE.fg, true));
   applyCellStyle(wsMatrix, legendRow, 2, createStyle(COLORS.FOLGA.bg, COLORS.FOLGA.fg, true));
   applyCellStyle(wsMatrix, legendRow, 3, createStyle(COLORS.BANCO.bg, COLORS.BANCO.fg, true));
   applyCellStyle(wsMatrix, legendRow, 4, createStyle(COLORS.VAZIO.bg, COLORS.VAZIO.fg, true));
   
   // Column widths
-  const matrixCols: XLSX.ColInfo[] = [{ wch: 24 }];
-  for (let i = 0; i < days.length; i++) {
-    matrixCols.push({ wch: 7 });
-  }
-  wsMatrix["!cols"] = matrixCols;
+  wsMatrix["!cols"] = [{ wch: 24 }, ...days.map(() => ({ wch: 7 }))];
   
   // Row heights
   wsMatrix["!rows"] = [
@@ -284,21 +291,17 @@ export function exportToExcel(options: ExportExcelOptions): void {
   wsKPI["!cols"] = [{ wch: 22 }, { wch: 15 }, { wch: 30 }];
   
   // Style KPI sheet
-  // Title
   for (let col = 0; col < 3; col++) {
     applyCellStyle(wsKPI, 0, col, createStyle(COLORS.TITLE.bg, COLORS.TITLE.fg, true, false));
   }
-  // Section headers
   applyCellStyle(wsKPI, 5, 0, createStyle(COLORS.HEADER.bg, COLORS.HEADER.fg, true, false));
-  applyCellStyle(wsKPI, 14, 0, createStyle(COLORS.HEADER.bg, COLORS.HEADER.fg, true, false));
+  applyCellStyle(wsKPI, 16, 0, createStyle(COLORS.HEADER.bg, COLORS.HEADER.fg, true, false));
   
-  // Table headers
   for (let col = 0; col < 3; col++) {
-    applyCellStyle(wsKPI, 7, col, createStyle("334155", "FFFFFF", true));
-    applyCellStyle(wsKPI, 16, col, createStyle("334155", "FFFFFF", true));
+    applyCellStyle(wsKPI, 7, col, createStyle(COLORS.LEGEND.bg, COLORS.LEGEND.fg, true));
+    applyCellStyle(wsKPI, 18, col, createStyle(COLORS.LEGEND.bg, COLORS.LEGEND.fg, true));
   }
   
-  // Taxa de entrega with conditional color
   applyCellStyle(wsKPI, 8, 1, getEvaluationStyle(taxa));
   
   XLSX.utils.book_append_sheet(wb, wsKPI, "KPIs");
@@ -324,7 +327,6 @@ export function exportToExcel(options: ExportExcelOptions): void {
     ["#", "Colaborador", "Entregas", "Folgas", "Banco", "Pendente", "Total", "Taxa %", "Avaliação"],
   ];
   
-  // Store taxa values for conditional formatting
   const rankingTaxas: number[] = [];
   
   Array.from(personStats.entries())
@@ -351,21 +353,15 @@ export function exportToExcel(options: ExportExcelOptions): void {
     { wch: 4 }, { wch: 24 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 12 }
   ];
   
-  // Style Ranking sheet
-  // Title
   for (let col = 0; col < 9; col++) {
     applyCellStyle(wsRanking, 0, col, createStyle(COLORS.TITLE.bg, COLORS.TITLE.fg, true, false));
   }
-  // Header row
   for (let col = 0; col < 9; col++) {
     applyCellStyle(wsRanking, 3, col, createStyle(COLORS.HEADER.bg, COLORS.HEADER.fg, true));
   }
-  // Apply conditional formatting to Taxa % and Avaliação columns
   rankingTaxas.forEach((taxaP, idx) => {
     const rowIdx = 4 + idx;
-    // Taxa % column (index 7)
     applyCellStyle(wsRanking, rowIdx, 7, getEvaluationStyle(taxaP));
-    // Avaliação column (index 8)
     applyCellStyle(wsRanking, rowIdx, 8, getEvaluationStyle(taxaP));
   });
   
@@ -394,7 +390,6 @@ export function exportToExcel(options: ExportExcelOptions): void {
     ["#", "Equipe", "Pessoas", "Entregas", "Folgas", "Banco", "Pendente", "Total", "Taxa %", "Status"],
   ];
   
-  // Store taxa values for conditional formatting
   const teamTaxas: number[] = [];
   
   Array.from(teamStats.entries())
@@ -422,21 +417,15 @@ export function exportToExcel(options: ExportExcelOptions): void {
     { wch: 4 }, { wch: 20 }, { wch: 9 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 10 }
   ];
   
-  // Style Team sheet
-  // Title
   for (let col = 0; col < 10; col++) {
     applyCellStyle(wsTeam, 0, col, createStyle(COLORS.TITLE.bg, COLORS.TITLE.fg, true, false));
   }
-  // Header row
   for (let col = 0; col < 10; col++) {
     applyCellStyle(wsTeam, 3, col, createStyle(COLORS.HEADER.bg, COLORS.HEADER.fg, true));
   }
-  // Apply conditional formatting to Taxa % and Status columns
   teamTaxas.forEach((taxaEq, idx) => {
     const rowIdx = 4 + idx;
-    // Taxa % column (index 8)
     applyCellStyle(wsTeam, rowIdx, 8, getEvaluationStyle(taxaEq));
-    // Status column (index 9)
     applyCellStyle(wsTeam, rowIdx, 9, getEvaluationStyle(taxaEq));
   });
   

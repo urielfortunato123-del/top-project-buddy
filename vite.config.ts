@@ -65,6 +65,18 @@ export default defineConfig(({ mode }) => ({
       },
     }),
   ].filter(Boolean),
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Separate xlsx-js-style into its own chunk (only loaded on export)
+          'excel-export': ['xlsx-js-style'],
+          // Separate recharts into its own chunk
+          'charts': ['recharts'],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
