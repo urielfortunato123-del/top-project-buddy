@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef } from "react";
-import { CheckCircle, AlertCircle, Coffee, Clock, Users, TrendingUp, FileDown, Loader2 } from "lucide-react";
+import { CheckCircle, AlertCircle, Coffee, Clock, Users, TrendingUp, FileDown, Loader2, Globe } from "lucide-react";
 import type { Dataset } from "@/lib/database";
 import type { DateRange } from "@/pages/Index";
 import { KPICard } from "./KPICard";
@@ -7,6 +7,7 @@ import { KPIDetailModal, type KPIType } from "./KPIDetailModal";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { exportDashboardToPDF } from "@/lib/pdfExport";
+import { exportToInteractiveHTML } from "@/lib/htmlExport";
 import {
   ChartCard,
   DeliveryLineChart,
@@ -147,6 +148,25 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     }
   };
 
+  const handleExportHTML = () => {
+    try {
+      exportToInteractiveHTML({
+        dataset,
+        filters: {
+          team: teamFilter,
+          person: personFilter,
+          status: statusFilter,
+          dateFrom: dateRange.from,
+          dateTo: dateRange.to,
+        },
+      });
+      toast({ title: "HTML interativo exportado com sucesso!" });
+    } catch (error) {
+      console.error("Error exporting HTML:", error);
+      toast({ title: "Erro ao exportar HTML", variant: "destructive" });
+    }
+  };
+
   if (filtered.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -161,7 +181,16 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <div className="flex items-center justify-end p-2 border-b bg-card shrink-0">
+      <div className="flex items-center justify-end gap-2 p-2 border-b bg-card shrink-0">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleExportHTML}
+          className="gap-2"
+        >
+          <Globe className="w-4 h-4" />
+          Exportar HTML
+        </Button>
         <Button
           variant="outline"
           size="sm"
