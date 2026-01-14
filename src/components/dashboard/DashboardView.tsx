@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef } from "react";
 import { CheckCircle, AlertCircle, Coffee, Clock, Users, TrendingUp, FileDown, Loader2, FileSpreadsheet } from "lucide-react";
 import type { Dataset } from "@/lib/database";
-import type { DateRange } from "@/pages/Index";
+import type { DateRange } from "@/lib/dateRange";
 import { KPICard } from "./KPICard";
 import { KPIDetailModal, type KPIType } from "./KPIDetailModal";
 import { Button } from "@/components/ui/button";

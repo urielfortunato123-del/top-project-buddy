@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from "react";
 import type { Dataset } from "@/lib/database";
-import type { DateRange } from "@/pages/Index";
+import type { DateRange } from "@/lib/dateRange";
 import { cn } from "@/lib/utils";
 
 interface SpreadsheetViewProps {

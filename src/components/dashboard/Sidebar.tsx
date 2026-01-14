@@ -3,7 +3,7 @@ import { LayoutDashboard, FileSpreadsheet, Upload, Database, Settings, Trash2, C
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Dataset } from "@/lib/database";
-import type { DateRange } from "@/pages/Index";
+import type { DateRange } from "@/lib/dateRange";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
