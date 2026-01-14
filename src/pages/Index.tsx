@@ -82,17 +82,17 @@ export default function Index() {
 
   // Listas dinâmicas baseadas nas colunas de categoria
   const { peopleList, statusList, teamList } = useMemo(() => {
-    if (!currentDataset) return { peopleList: [], statusList: [], teamList: [] };
+    if (!currentDataset || !currentDataset.summary) return { peopleList: [], statusList: [], teamList: [] };
     
-    const catCols = currentDataset.detectedCategoryColumns;
-    const counts = currentDataset.summary.categoryCounts;
+    const catCols = currentDataset.detectedCategoryColumns || [];
+    const counts = currentDataset.summary.categoryCounts || {};
     
     return {
       teamList: catCols[0] && counts[catCols[0]] ? Object.keys(counts[catCols[0]]) : [],
       peopleList: catCols[1] && counts[catCols[1]] ? Object.keys(counts[catCols[1]]) : [],
       statusList: catCols[2] && counts[catCols[2]] ? Object.keys(counts[catCols[2]]) : [],
     };
-  }, [currentDataset, teamFilter]);
+  }, [currentDataset]);
 
   const clearFilters = () => {
     setPersonFilter("ALL");
