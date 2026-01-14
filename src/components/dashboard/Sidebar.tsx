@@ -76,12 +76,14 @@ export function Sidebar({
       {/* Logo */}
       <div className="p-4 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg">
-            <LayoutDashboard className="w-5 h-5 text-white" />
-          </div>
+          <img 
+            src="/logo-essencial-small.png" 
+            alt="Essencial" 
+            className="w-10 h-10 rounded-xl object-contain"
+          />
           <div>
-            <h1 className="font-bold text-sm tracking-wide">DASHBOARD</h1>
-            <p className="text-xs text-sidebar-muted">Excel → Interativo</p>
+            <h1 className="font-bold text-sm tracking-wide">ESSENCIAL</h1>
+            <p className="text-xs text-sidebar-muted">Sistema em Ordem</p>
           </div>
         </div>
       </div>
@@ -245,14 +247,17 @@ export function Sidebar({
       )}
 
       {/* Footer */}
-      <div className="p-4 text-xs text-sidebar-muted">
-        <div className="flex items-center justify-between">
+      <div className="p-4 text-xs text-sidebar-muted border-t border-sidebar-border">
+        <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
             <span>PWA Offline Ready</span>
           </div>
           <ThemeToggle />
         </div>
+        <p className="text-center text-[10px] text-sidebar-muted/70 mt-2">
+          Desenvolvido por <span className="font-medium text-primary/80">Uriel da Fonseca Fortunato</span>
+        </p>
       </div>
     </aside>
   );
