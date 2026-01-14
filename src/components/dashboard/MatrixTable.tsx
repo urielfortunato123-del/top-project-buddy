@@ -1,6 +1,5 @@
 import React, { useMemo, useRef, useEffect, useState } from "react";
 import type { DatasetRow } from "@/lib/database";
-import { cn } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
@@ -12,33 +11,41 @@ interface MatrixTableProps {
   rows: DatasetRow[];
 }
 
-const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+const STATUS_CHIPS: Record<string, { label: string; bg: string; text: string; border: string }> = {
   "ENTREGUE": { 
     label: "ENT", 
-    className: "bg-primary/20 text-primary border-primary/40 hover:bg-primary/30" 
+    bg: "bg-green-100", 
+    text: "text-green-700", 
+    border: "border-green-300" 
   },
   "FOLGA": { 
     label: "FOL", 
-    className: "bg-secondary/20 text-secondary border-secondary/40 hover:bg-secondary/30" 
+    bg: "bg-orange-100", 
+    text: "text-orange-700", 
+    border: "border-orange-300" 
   },
   "BANCO DE HORAS": { 
     label: "BAN", 
-    className: "bg-accent/20 text-accent border-accent/40 hover:bg-accent/30" 
+    bg: "bg-blue-100", 
+    text: "text-blue-700", 
+    border: "border-blue-300" 
   },
   "VAZIO": { 
     label: "-", 
-    className: "bg-muted/50 text-muted-foreground border-muted hover:bg-muted" 
+    bg: "bg-gray-100", 
+    text: "text-gray-500", 
+    border: "border-gray-200" 
   },
 };
 
 function formatDayMonth(dateStr: string): string {
-  const [year, month, day] = dateStr.split("-");
+  const [, month, day] = dateStr.split("-");
   return `${day}/${month}`;
 }
 
 export function MatrixTable({ rows }: MatrixTableProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 20 });
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 30 });
   
   // Get unique sorted dates and people
   const { days, people, statusMap } = useMemo(() => {
@@ -61,7 +68,7 @@ export function MatrixTable({ rows }: MatrixTableProps) {
   }, [rows]);
 
   // Virtualization for people (rows)
-  const ROW_HEIGHT = 36;
+  const ROW_HEIGHT = 40;
   const VISIBLE_BUFFER = 5;
   
   useEffect(() => {
@@ -87,119 +94,111 @@ export function MatrixTable({ rows }: MatrixTableProps) {
 
   if (days.length === 0 || people.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground">
-        <p>Nenhum dado para exibir na matriz</p>
+      <div className="flex items-center justify-center h-full text-gray-500">
+        <p className="text-sm">Nenhum dado para exibir</p>
       </div>
     );
   }
 
   return (
-    <TooltipProvider delayDuration={200}>
-      <div className="h-full flex flex-col bg-card rounded-2xl border shadow-lg overflow-hidden">
-        {/* Header with legend */}
-        <div className="p-3 border-b bg-muted/30 flex items-center justify-between shrink-0">
-          <h3 className="font-semibold text-sm">Matriz Pessoa × Dia</h3>
-          <div className="flex items-center gap-3 text-xs">
-            <div className="flex items-center gap-1">
-              <span className="px-2 py-0.5 rounded-full border text-[10px] font-bold bg-primary/20 text-primary border-primary/40">ENT</span>
-              <span className="text-muted-foreground">Entregue</span>
+    <TooltipProvider delayDuration={100}>
+      <div className="h-full flex flex-col">
+        {/* Header */}
+        <div className="px-4 py-3 border-b bg-gray-50 shrink-0">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-sm text-gray-800">Matriz Pessoa × Dia</h3>
+            <div className="flex items-center gap-3 text-xs">
+              <span className="flex items-center gap-1">
+                <span className="px-2 py-1 rounded-full text-[10px] font-semibold bg-green-100 text-green-700 border border-green-300">ENT</span>
+                <span className="text-gray-500">Entregue</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="px-2 py-1 rounded-full text-[10px] font-semibold bg-orange-100 text-orange-700 border border-orange-300">FOL</span>
+                <span className="text-gray-500">Folga</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="px-2 py-1 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700 border border-blue-300">BAN</span>
+                <span className="text-gray-500">Banco</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="px-2 py-1 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-500 border border-gray-200">-</span>
+                <span className="text-gray-500">Sem Info</span>
+              </span>
             </div>
-            <div className="flex items-center gap-1">
-              <span className="px-2 py-0.5 rounded-full border text-[10px] font-bold bg-secondary/20 text-secondary border-secondary/40">FOL</span>
-              <span className="text-muted-foreground">Folga</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="px-2 py-0.5 rounded-full border text-[10px] font-bold bg-accent/20 text-accent border-accent/40">BAN</span>
-              <span className="text-muted-foreground">Banco</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="px-2 py-0.5 rounded-full border text-[10px] font-bold bg-muted/50 text-muted-foreground border-muted">-</span>
-              <span className="text-muted-foreground">Sem Info</span>
-            </div>
+          </div>
+          <div className="mt-2 text-xs text-gray-500">
+            <span className="font-medium">{people.length}</span> pessoas • <span className="font-medium">{days.length}</span> dias • <span className="font-medium">{rows.length}</span> registros
           </div>
         </div>
 
-        {/* Stats bar */}
-        <div className="px-3 py-2 border-b bg-background text-xs text-muted-foreground flex gap-4 shrink-0">
-          <span><strong>{people.length}</strong> pessoas</span>
-          <span><strong>{days.length}</strong> dias</span>
-          <span><strong>{rows.length}</strong> registros</span>
-        </div>
-
-        {/* Table container with virtualization */}
-        <div className="flex-1 overflow-hidden flex">
-          {/* Fixed names column */}
-          <div 
-            ref={containerRef}
-            className="flex-1 overflow-auto"
-          >
-            <div style={{ height: totalHeight, position: "relative" }}>
-              {/* Header row (sticky) */}
-              <div className="sticky top-0 z-20 flex bg-card border-b">
-                <div className="sticky left-0 z-30 w-36 min-w-36 px-3 py-2 bg-muted/50 border-r font-semibold text-xs truncate">
-                  Colaborador
+        {/* Table container */}
+        <div 
+          ref={containerRef}
+          className="flex-1 overflow-auto"
+        >
+          <div style={{ height: totalHeight + 48, position: "relative", minWidth: 160 + days.length * 52 }}>
+            {/* Sticky Header Row */}
+            <div className="sticky top-0 z-20 flex bg-white border-b shadow-sm">
+              <div className="sticky left-0 z-30 w-40 min-w-40 px-3 py-2 bg-gray-100 border-r font-semibold text-xs text-gray-700">
+                Colaborador
+              </div>
+              {days.map((day) => (
+                <div
+                  key={day}
+                  className="w-[52px] min-w-[52px] px-1 py-2 text-center text-xs font-medium text-gray-600 bg-gray-50 border-r"
+                >
+                  {formatDayMonth(day)}
                 </div>
-                {days.map((day) => (
-                  <div
-                    key={day}
-                    className="w-12 min-w-12 px-1 py-2 text-center text-xs font-medium bg-muted/50 border-r"
-                  >
-                    {formatDayMonth(day)}
+              ))}
+            </div>
+
+            {/* Virtualized Rows */}
+            <div style={{ transform: `translateY(${offsetTop}px)`, position: "absolute", top: 48, left: 0, right: 0 }}>
+              {visiblePeople.map((person) => (
+                <div
+                  key={person}
+                  className="flex border-b hover:bg-gray-50/50"
+                  style={{ height: ROW_HEIGHT }}
+                >
+                  {/* Person name - sticky left */}
+                  <div className="sticky left-0 z-10 w-40 min-w-40 px-3 flex items-center bg-white border-r">
+                    <span className="text-xs font-medium text-gray-800 truncate" title={person}>
+                      {person}
+                    </span>
                   </div>
-                ))}
-              </div>
 
-              {/* Virtualized rows */}
-              <div style={{ transform: `translateY(${offsetTop}px)` }}>
-                {visiblePeople.map((person) => (
-                  <div
-                    key={person}
-                    className="flex border-b hover:bg-muted/20 transition-colors"
-                    style={{ height: ROW_HEIGHT }}
-                  >
-                    {/* Fixed person name */}
-                    <div className="sticky left-0 z-10 w-36 min-w-36 px-3 flex items-center bg-card border-r">
-                      <span className="text-xs font-medium truncate" title={person}>
-                        {person}
-                      </span>
-                    </div>
+                  {/* Status cells */}
+                  {days.map((day) => {
+                    const key = `${person}|${day}`;
+                    const data = statusMap.get(key);
+                    const status = data?.status || "VAZIO";
+                    const team = data?.team || "-";
+                    const chip = STATUS_CHIPS[status] || STATUS_CHIPS["VAZIO"];
 
-                    {/* Status cells */}
-                    {days.map((day) => {
-                      const key = `${person}|${day}`;
-                      const data = statusMap.get(key);
-                      const status = data?.status || "VAZIO";
-                      const team = data?.team || "-";
-                      const config = STATUS_CONFIG[status] || STATUS_CONFIG["VAZIO"];
-
-                      return (
-                        <Tooltip key={day}>
-                          <TooltipTrigger asChild>
-                            <div className="w-12 min-w-12 px-0.5 flex items-center justify-center border-r">
-                              <span
-                                className={cn(
-                                  "px-1.5 py-0.5 rounded-full border text-[10px] font-bold cursor-default transition-all",
-                                  config.className
-                                )}
-                              >
-                                {config.label}
-                              </span>
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="text-xs">
-                            <div className="space-y-1">
-                              <p><strong>Pessoa:</strong> {person}</p>
-                              <p><strong>Data:</strong> {formatDayMonth(day)}</p>
-                              <p><strong>Status:</strong> {status === "VAZIO" ? "Sem Info" : status}</p>
-                              <p><strong>Equipe:</strong> {team}</p>
-                            </div>
-                          </TooltipContent>
-                        </Tooltip>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
+                    return (
+                      <Tooltip key={day}>
+                        <TooltipTrigger asChild>
+                          <div className="w-[52px] min-w-[52px] flex items-center justify-center border-r">
+                            <span
+                              className={`px-2 py-1 rounded-full text-[10px] font-semibold cursor-default transition-transform hover:scale-110 border ${chip.bg} ${chip.text} ${chip.border}`}
+                            >
+                              {chip.label}
+                            </span>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs bg-gray-900 text-white border-0">
+                          <div className="space-y-0.5">
+                            <p><span className="text-gray-400">Pessoa:</span> {person}</p>
+                            <p><span className="text-gray-400">Data:</span> {formatDayMonth(day)}</p>
+                            <p><span className="text-gray-400">Status:</span> {status === "VAZIO" ? "Sem Info" : status}</p>
+                            <p><span className="text-gray-400">Equipe:</span> {team}</p>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           </div>
         </div>
