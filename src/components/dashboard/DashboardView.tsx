@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { exportDashboardToPDF } from "@/lib/pdfExport";
 import { exportToExcel } from "@/lib/excelExport";
+import { exportInteractiveZIP } from "@/lib/reportExport";
 import {
   ChartCard,
   DeliveryLineChart,
