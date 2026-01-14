@@ -10,6 +10,7 @@ interface KPICardProps {
   trendValue?: string;
   variant?: "default" | "success" | "warning" | "danger" | "info";
   className?: string;
+  onClick?: () => void;
 }
 
 const variantStyles = {
@@ -27,12 +28,15 @@ export function KPICard({
   icon,
   variant = "default",
   className,
+  onClick,
 }: KPICardProps) {
   return (
     <div
+      onClick={onClick}
       className={cn(
-        "bg-card rounded-2xl border p-4 shadow-lg animate-fade-in",
+        "bg-card rounded-2xl border p-4 shadow-lg animate-fade-in transition-all",
         variantStyles[variant],
+        onClick && "cursor-pointer hover:shadow-xl hover:scale-[1.02] hover:border-primary/30 active:scale-[0.98]",
         className
       )}
     >

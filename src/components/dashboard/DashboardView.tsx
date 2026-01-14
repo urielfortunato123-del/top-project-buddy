@@ -1,8 +1,9 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { CheckCircle, AlertCircle, Coffee, Clock, Users, TrendingUp } from "lucide-react";
 import type { Dataset, DatasetRow } from "@/lib/database";
 import type { DateRange } from "@/pages/Index";
 import { KPICard } from "./KPICard";
+import { KPIDetailModal, type KPIType } from "./KPIDetailModal";
 import {
   ChartCard,
   DeliveryLineChart,
@@ -27,6 +28,9 @@ function prettyStatus(s: string) {
 }
 
 export function DashboardView({ dataset, personFilter, statusFilter, teamFilter, dateRange }: DashboardViewProps) {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalType, setModalType] = useState<KPIType>("taxa");
+
   const filtered = useMemo(() => {
     let data = dataset.rows;
     
@@ -107,6 +111,11 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     }));
   }, [barByTeam]);
 
+  const openModal = (type: KPIType) => {
+    setModalType(type);
+    setModalOpen(true);
+  };
+
   if (filtered.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -129,6 +138,7 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           subtitle={`${kpis.entregue} de ${kpis.total} registros`}
           icon={<TrendingUp className="w-5 h-5 text-primary" />}
           variant="success"
+          onClick={() => openModal("taxa")}
         />
         <KPICard
           title="Total Entregue"
@@ -136,6 +146,7 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           subtitle="Marcados como ENTREGUE"
           icon={<CheckCircle className="w-5 h-5 text-primary" />}
           variant="success"
+          onClick={() => openModal("entregue")}
         />
         <KPICard
           title="Pendências"
@@ -143,6 +154,7 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           subtitle="Sem informação lançada"
           icon={<AlertCircle className="w-5 h-5 text-secondary" />}
           variant="warning"
+          onClick={() => openModal("pendencias")}
         />
         <KPICard
           title="Folgas"
@@ -150,20 +162,32 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           subtitle="Dias de folga"
           icon={<Coffee className="w-5 h-5 text-accent" />}
           variant="info"
+          onClick={() => openModal("folgas")}
         />
         <KPICard
           title="Banco de Horas"
           value={kpis.banco}
           subtitle="Compensações"
           icon={<Clock className="w-5 h-5 text-purple-500" />}
+          onClick={() => openModal("banco")}
         />
         <KPICard
           title="Pessoas"
           value={kpis.uniquePeople}
           subtitle="Colaboradores únicos"
           icon={<Users className="w-5 h-5 text-muted-foreground" />}
+          onClick={() => openModal("pessoas")}
         />
       </div>
+
+      {/* Modal for KPI details */}
+      <KPIDetailModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        type={modalType}
+        data={filtered}
+        kpis={kpis}
+      />
 
       {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
