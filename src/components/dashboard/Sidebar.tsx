@@ -66,7 +66,7 @@ export function Sidebar({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".xlsx,.xls"
+          accept=".xlsx,.xls,.csv"
           onChange={handleFileChange}
           className="hidden"
         />
@@ -75,7 +75,7 @@ export function Sidebar({
           className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-primary/20 hover:bg-primary/30 border border-primary/40 transition-all text-sm font-semibold"
         >
           <Upload className="w-4 h-4" />
-          Importar Excel
+          Importar Excel/CSV
         </button>
       </div>
 
