@@ -6,15 +6,30 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Users, Calendar, Tag } from "lucide-react";
 
 interface MatrixTableProps {
   /** Linhas visíveis (já filtradas) usadas para preencher os valores */
   rows: GenericRow[];
   /** Linhas de domínio (sem filtros) usadas para garantir que todos os funcionários/colunas apareçam */
   domainRows?: GenericRow[];
-  rowColumn: string; // Coluna para usar como linhas
-  colColumn: string; // Coluna para usar como colunas
-  valueColumn: string; // Coluna para mostrar os valores
+  /** Coluna inicial para linhas (pessoa) */
+  rowColumn: string;
+  /** Coluna inicial para colunas (data) */
+  colColumn: string;
+  /** Coluna inicial para valores (status) */
+  valueColumn: string;
+  /** Todas as colunas disponíveis para seleção */
+  availableColumns?: string[];
+  /** Callback quando as colunas mudam */
+  onColumnsChange?: (row: string, col: string, value: string) => void;
 }
 
 // Cores para diferentes valores
@@ -50,9 +65,40 @@ function getShortLabel(value: any): string {
   return first.slice(0, 4).toUpperCase();
 }
 
-export function MatrixTable({ rows, domainRows, rowColumn, colColumn, valueColumn }: MatrixTableProps) {
+export function MatrixTable({ 
+  rows, 
+  domainRows, 
+  rowColumn: initialRowColumn, 
+  colColumn: initialColColumn, 
+  valueColumn: initialValueColumn,
+  availableColumns = [],
+  onColumnsChange,
+}: MatrixTableProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 30 });
+  
+  // Estado local para as colunas selecionadas
+  const [selectedRowCol, setSelectedRowCol] = useState(initialRowColumn);
+  const [selectedColCol, setSelectedColCol] = useState(initialColColumn);
+  const [selectedValueCol, setSelectedValueCol] = useState(initialValueColumn);
+
+  // Atualiza quando props mudam
+  useEffect(() => {
+    setSelectedRowCol(initialRowColumn);
+  }, [initialRowColumn]);
+  
+  useEffect(() => {
+    setSelectedColCol(initialColColumn);
+  }, [initialColColumn]);
+  
+  useEffect(() => {
+    setSelectedValueCol(initialValueColumn);
+  }, [initialValueColumn]);
+
+  // Usa as colunas selecionadas
+  const rowColumn = selectedRowCol || initialRowColumn;
+  const colColumn = selectedColCol || initialColColumn;
+  const valueColumn = selectedValueCol || initialValueColumn;
 
   const domain = domainRows ?? rows;
   
@@ -125,10 +171,99 @@ export function MatrixTable({ rows, domainRows, rowColumn, colColumn, valueColum
   const totalHeight = rowKeys.length * ROW_HEIGHT;
   const offsetTop = visibleRange.start * ROW_HEIGHT;
 
+  // Lista de colunas para os seletores
+  const columnOptions = useMemo(() => {
+    if (availableColumns.length > 0) return availableColumns;
+    // Fallback: pega colunas únicas das linhas
+    const cols = new Set<string>();
+    for (const r of rows.slice(0, 100)) {
+      Object.keys(r).forEach(k => cols.add(k));
+    }
+    return Array.from(cols).filter(Boolean);
+  }, [availableColumns, rows]);
+
+  const handleRowColChange = (value: string) => {
+    setSelectedRowCol(value);
+    onColumnsChange?.(value, colColumn, valueColumn);
+  };
+
+  const handleColColChange = (value: string) => {
+    setSelectedColCol(value);
+    onColumnsChange?.(rowColumn, value, valueColumn);
+  };
+
+  const handleValueColChange = (value: string) => {
+    setSelectedValueCol(value);
+    onColumnsChange?.(rowColumn, colColumn, value);
+  };
+
   if (cols.length === 0 || rowKeys.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-500">
-        <p className="text-sm">Nenhum dado para matriz</p>
+      <div className="h-full flex flex-col">
+        {/* Header com seletores mesmo sem dados */}
+        <div className="px-4 py-3 border-b bg-gray-50 shrink-0 space-y-3">
+          <h3 className="font-bold text-sm text-gray-800">Configurar Matriz</h3>
+          
+          <div className="grid grid-cols-3 gap-2">
+            <div className="space-y-1">
+              <label className="text-[10px] text-gray-500 flex items-center gap-1">
+                <Users className="w-3 h-3" /> Pessoa
+              </label>
+              <Select value={selectedRowCol} onValueChange={handleRowColChange}>
+                <SelectTrigger className="h-8 text-xs bg-white">
+                  <SelectValue placeholder="Coluna..." />
+                </SelectTrigger>
+                <SelectContent className="bg-white z-50">
+                  {columnOptions.map((col) => (
+                    <SelectItem key={col} value={col} className="text-xs">
+                      {col}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-1">
+              <label className="text-[10px] text-gray-500 flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> Data
+              </label>
+              <Select value={selectedColCol} onValueChange={handleColColChange}>
+                <SelectTrigger className="h-8 text-xs bg-white">
+                  <SelectValue placeholder="Coluna..." />
+                </SelectTrigger>
+                <SelectContent className="bg-white z-50">
+                  {columnOptions.map((col) => (
+                    <SelectItem key={col} value={col} className="text-xs">
+                      {col}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-1">
+              <label className="text-[10px] text-gray-500 flex items-center gap-1">
+                <Tag className="w-3 h-3" /> Status
+              </label>
+              <Select value={selectedValueCol} onValueChange={handleValueColChange}>
+                <SelectTrigger className="h-8 text-xs bg-white">
+                  <SelectValue placeholder="Coluna..." />
+                </SelectTrigger>
+                <SelectContent className="bg-white z-50">
+                  {columnOptions.map((col) => (
+                    <SelectItem key={col} value={col} className="text-xs">
+                      {col}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex items-center justify-center flex-1 text-gray-500">
+          <p className="text-sm">Nenhum dado para matriz</p>
+        </div>
       </div>
     );
   }
@@ -139,13 +274,68 @@ export function MatrixTable({ rows, domainRows, rowColumn, colColumn, valueColum
   return (
     <TooltipProvider delayDuration={100}>
       <div className="h-full flex flex-col">
-        {/* Header */}
-        <div className="px-4 py-3 border-b bg-gray-50 shrink-0">
+        {/* Header com seletores */}
+        <div className="px-4 py-3 border-b bg-gray-50 shrink-0 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-sm text-gray-800">Matriz: {rowColumn} × {colColumn}</h3>
+            <span className="text-[10px] text-gray-400">{rowKeys.length} × {cols.length}</span>
           </div>
-          <div className="mt-2 text-xs text-gray-500">
-            <span className="font-medium">{rowKeys.length}</span> {rowColumn} • <span className="font-medium">{cols.length}</span> {colColumn}
+          
+          {/* Seletores de colunas */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="space-y-1">
+              <label className="text-[10px] text-gray-500 flex items-center gap-1">
+                <Users className="w-3 h-3" /> Pessoa
+              </label>
+              <Select value={selectedRowCol} onValueChange={handleRowColChange}>
+                <SelectTrigger className="h-8 text-xs bg-white">
+                  <SelectValue placeholder="Coluna..." />
+                </SelectTrigger>
+                <SelectContent className="bg-white z-50">
+                  {columnOptions.map((col) => (
+                    <SelectItem key={col} value={col} className="text-xs">
+                      {col}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-1">
+              <label className="text-[10px] text-gray-500 flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> Data
+              </label>
+              <Select value={selectedColCol} onValueChange={handleColColChange}>
+                <SelectTrigger className="h-8 text-xs bg-white">
+                  <SelectValue placeholder="Coluna..." />
+                </SelectTrigger>
+                <SelectContent className="bg-white z-50">
+                  {columnOptions.map((col) => (
+                    <SelectItem key={col} value={col} className="text-xs">
+                      {col}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-1">
+              <label className="text-[10px] text-gray-500 flex items-center gap-1">
+                <Tag className="w-3 h-3" /> Status
+              </label>
+              <Select value={selectedValueCol} onValueChange={handleValueColChange}>
+                <SelectTrigger className="h-8 text-xs bg-white">
+                  <SelectValue placeholder="Coluna..." />
+                </SelectTrigger>
+                <SelectContent className="bg-white z-50">
+                  {columnOptions.map((col) => (
+                    <SelectItem key={col} value={col} className="text-xs">
+                      {col}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 

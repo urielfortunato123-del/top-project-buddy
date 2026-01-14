@@ -276,6 +276,7 @@ export default function Index() {
             rowColumn={findBestPersonColumn(matrixCandidateColumns, activeDataset.rows)}
             colColumn={activeDataset.detectedDateColumn || matrixCandidateColumns[0]}
             valueColumn={findStatusColumn(matrixCandidateColumns, activeDataset.rows) || matrixCandidateColumns[0]}
+            availableColumns={activeDataset.columns?.map(c => typeof c === 'string' ? c : c.name) || []}
           />
         </aside>
       )}
