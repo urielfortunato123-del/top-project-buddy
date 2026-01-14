@@ -1,7 +1,8 @@
 import React, { useMemo, useState, useRef } from "react";
 import { 
   FileDown, Loader2, BarChart3, PieChart, TrendingUp, 
-  Hash, Calendar, Tag, Users, Database, Layers, FileCode
+  Hash, Calendar, Tag, Users, Database, Layers, FileCode,
+  CheckCircle2, Clock, Coffee, Briefcase, AlertCircle
 } from "lucide-react";
 import type { Dataset, ColumnMetadata } from "@/lib/database";
 import { KPICard } from "./KPICard";
@@ -26,6 +27,54 @@ interface DashboardViewProps {
   dateRange: { from?: Date; to?: Date };
 }
 
+// Detecta se é uma planilha tipo RDA baseado nos valores de status
+function detectRDAType(categoryCounts: Record<string, Record<string, number>>): {
+  isRDA: boolean;
+  statusColumn: string | null;
+  personColumn: string | null;
+  teamColumn: string | null;
+} {
+  let statusColumn: string | null = null;
+  let personColumn: string | null = null;
+  let teamColumn: string | null = null;
+  
+  const statusPatterns = /^(ENTREGUE?|FOLGA?|FALTA?|BANCO|ATESTADO?|FER[IÉ]AS?|VAZIO|-)$/i;
+  
+  for (const [colName, counts] of Object.entries(categoryCounts)) {
+    const values = Object.keys(counts);
+    const hasStatusValues = values.some(v => statusPatterns.test(v.trim()));
+    
+    if (hasStatusValues && !statusColumn) {
+      statusColumn = colName;
+    } else if (!statusColumn) {
+      // Se não tem valores de status, pode ser pessoa ou equipe
+      const uniqueCount = values.length;
+      if (uniqueCount > 10 && !personColumn) {
+        personColumn = colName; // Muitos valores = provavelmente pessoas
+      } else if (uniqueCount <= 10 && uniqueCount > 1 && !teamColumn) {
+        teamColumn = colName; // Poucos valores = provavelmente equipes
+      }
+    }
+  }
+  
+  // Se não encontrou pessoa, usa a coluna com mais valores únicos
+  if (!personColumn && teamColumn) {
+    for (const [colName, counts] of Object.entries(categoryCounts)) {
+      if (colName !== statusColumn && colName !== teamColumn) {
+        personColumn = colName;
+        break;
+      }
+    }
+  }
+  
+  return {
+    isRDA: statusColumn !== null,
+    statusColumn,
+    personColumn,
+    teamColumn,
+  };
+}
+
 export function DashboardView({ dataset, personFilter, statusFilter, teamFilter, dateRange }: DashboardViewProps) {
   const [exporting, setExporting] = useState(false);
   const [selectedKPI, setSelectedKPI] = useState<any>(null);
@@ -39,6 +88,11 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
   const safeNumericColumns = dataset?.detectedNumericColumns ?? [];
   const safeTextColumns = dataset?.detectedTextColumns ?? [];
   const safeSummary = dataset?.summary ?? { totalRecords: 0, categoryCounts: {}, numericStats: {}, dateRange: undefined };
+
+  // Detecta tipo RDA
+  const rdaInfo = useMemo(() => {
+    return detectRDAType(safeSummary.categoryCounts || {});
+  }, [safeSummary.categoryCounts]);
 
   // Filtra dados baseado nos filtros ativos
   const filtered = useMemo(() => {
@@ -70,7 +124,56 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     return data;
   }, [dataset, safeRows, safeCategoryColumns, personFilter, statusFilter, teamFilter, dateRange]);
 
-  // Gera KPIs dinâmicos com dados expandidos
+  // KPIs específicos para RDA
+  const rdaKpis = useMemo(() => {
+    if (!rdaInfo.isRDA || !rdaInfo.statusColumn) return null;
+    
+    const statusCol = rdaInfo.statusColumn;
+    const personCol = rdaInfo.personColumn;
+    
+    // Conta status
+    const statusCounts: Record<string, number> = {};
+    const uniquePeople = new Set<string>();
+    
+    for (const r of filtered) {
+      const status = String(r[statusCol] || "VAZIO").trim().toUpperCase();
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+      
+      if (personCol) {
+        const person = String(r[personCol] || "").trim();
+        if (person && !/^(ENTREGUE?|FOLGA?|FALTA?|BANCO|ATESTADO?|FER[IÉ]AS?|VAZIO|-)$/i.test(person)) {
+          uniquePeople.add(person);
+        }
+      }
+    }
+    
+    const total = filtered.length;
+    const entregue = (statusCounts["ENTREGUE"] || 0) + (statusCounts["ENT"] || 0);
+    const folga = (statusCounts["FOLGA"] || 0) + (statusCounts["FOL"] || 0);
+    const banco = (statusCounts["BANCO DE HORAS"] || 0) + (statusCounts["BANCO"] || 0) + (statusCounts["BAN"] || 0);
+    const falta = (statusCounts["FALTA"] || 0) + (statusCounts["FAL"] || 0);
+    const atestado = (statusCounts["ATESTADO"] || 0) + (statusCounts["ATE"] || 0);
+    const ferias = (statusCounts["FÉRIAS"] || 0) + (statusCounts["FERIAS"] || 0) + (statusCounts["FER"] || 0);
+    const vazio = (statusCounts["VAZIO"] || 0) + (statusCounts["-"] || 0) + (statusCounts[""] || 0);
+    
+    const taxaEntrega = total > 0 ? Math.round((entregue / total) * 100) : 0;
+    const pendencias = total - entregue - folga - banco - falta - atestado - ferias;
+    
+    return {
+      taxaEntrega,
+      entregue,
+      pendencias: pendencias > 0 ? pendencias : vazio,
+      folga,
+      banco,
+      falta,
+      atestado,
+      ferias,
+      pessoas: uniquePeople.size,
+      total,
+    };
+  }, [filtered, rdaInfo]);
+
+  // Gera KPIs dinâmicos
   const kpis = useMemo(() => {
     if (!dataset) return [];
     
@@ -88,7 +191,68 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
       percentage?: number;
     }> = [];
     
-    // KPI: Total de registros
+    // Se for RDA, usa KPIs específicos
+    if (rdaKpis) {
+      result.push({
+        title: "Taxa de Entrega",
+        value: `${rdaKpis.taxaEntrega}%`,
+        subtitle: `${rdaKpis.entregue} de ${rdaKpis.total} registros`,
+        icon: <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-primary" />,
+        variant: "default",
+        type: "count",
+        total: rdaKpis.total,
+        percentage: rdaKpis.taxaEntrega,
+      });
+      
+      result.push({
+        title: "Total Entregue",
+        value: rdaKpis.entregue.toLocaleString("pt-BR"),
+        subtitle: "Marcados como ENTREGUE",
+        icon: <CheckCircle2 className="w-4 h-4 md:w-5 md:h-5 text-primary" />,
+        variant: "success",
+        type: "count",
+      });
+      
+      result.push({
+        title: "Pendências",
+        value: rdaKpis.pendencias.toLocaleString("pt-BR"),
+        subtitle: "Sem informação lançada",
+        icon: <AlertCircle className="w-4 h-4 md:w-5 md:h-5 text-secondary" />,
+        variant: "warning",
+        type: "count",
+      });
+      
+      result.push({
+        title: "Folgas",
+        value: rdaKpis.folga.toLocaleString("pt-BR"),
+        subtitle: "Dias de folga",
+        icon: <Coffee className="w-4 h-4 md:w-5 md:h-5 text-accent" />,
+        variant: "info",
+        type: "count",
+      });
+      
+      result.push({
+        title: "Banco de Horas",
+        value: rdaKpis.banco.toLocaleString("pt-BR"),
+        subtitle: "Compensações",
+        icon: <Clock className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />,
+        variant: "default",
+        type: "count",
+      });
+      
+      result.push({
+        title: "Pessoas",
+        value: rdaKpis.pessoas.toLocaleString("pt-BR"),
+        subtitle: "Colaboradores únicos",
+        icon: <Users className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />,
+        variant: "default",
+        type: "count",
+      });
+      
+      return result;
+    }
+    
+    // KPIs genéricos para outras planilhas
     const filteredCount = filtered?.length ?? 0;
     const totalCount = dataset.totalRows ?? 0;
     result.push({
@@ -160,31 +324,38 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     }
     
     return result.slice(0, 6); // Máximo 6 KPIs
-  }, [dataset, filtered, safeNumericColumns, safeCategoryColumns, safeSummary]);
+  }, [dataset, filtered, rdaKpis, safeNumericColumns, safeCategoryColumns, safeSummary]);
 
   const handleKPIClick = (kpi: typeof kpis[0]) => {
     setSelectedKPI(kpi);
     setKpiModalOpen(true);
   };
 
-  // Gera dados para gráfico de linha (se tiver coluna de data)
+  // Gera dados para gráfico de linha (entregas por dia)
   const lineChartData = useMemo(() => {
     if (!dataset) return null;
     const dateCol = dataset.detectedDateColumn;
     if (!dateCol) return null;
     
-    const numCol = safeNumericColumns[0];
-    const catCol = safeCategoryColumns[0];
+    const statusCol = rdaInfo.statusColumn;
     
-    const map = new Map<string, { date: string; count: number; sum: number }>();
+    const map = new Map<string, { date: string; count: number; entregue: number }>();
     
     for (const r of filtered) {
       const date = r[dateCol];
       if (!date) continue;
       
-      const cur = map.get(date) || { date, count: 0, sum: 0 };
+      const cur = map.get(date) || { date, count: 0, entregue: 0 };
       cur.count += 1;
-      if (numCol) cur.sum += parseFloat(r[numCol]) || 0;
+      
+      // Para RDA, conta entregas
+      if (statusCol) {
+        const status = String(r[statusCol] || "").trim().toUpperCase();
+        if (status === "ENTREGUE" || status === "ENT") {
+          cur.entregue += 1;
+        }
+      }
+      
       map.set(date, cur);
     }
     
@@ -192,42 +363,24 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
       .sort((a, b) => a.date.localeCompare(b.date))
       .map(item => ({
         date: item.date,
-        value1: item.count,
-        value2: numCol ? item.sum : undefined,
-        label1: "Registros",
-        label2: numCol || undefined,
+        value1: rdaInfo.isRDA ? item.entregue : item.count,
+        label1: rdaInfo.isRDA ? "Entregas" : "Registros",
       }));
-  }, [dataset, filtered, safeNumericColumns, safeCategoryColumns]);
+  }, [dataset, filtered, rdaInfo]);
 
-  // Gera dados para gráfico de pizza (coluna de categoria com menos valores únicos - provavelmente equipe/pessoa)
+  // Gera dados para gráfico de pizza (distribuição por status)
   const pieChartData = useMemo(() => {
     if (safeCategoryColumns.length === 0) return null;
     
-    // Encontra a coluna com menos valores únicos (geralmente representa equipe/pessoa)
-    // Evita colunas com valores tipo status (ENT, FOL, etc)
-    let bestCol = safeCategoryColumns[0];
-    let minUnique = Infinity;
-    
-    for (const colName of safeCategoryColumns) {
-      const counts = safeSummary.categoryCounts?.[colName];
-      if (counts) {
-        const uniqueCount = Object.keys(counts).length;
-        // Preferir colunas com menos valores únicos e que não parecem ser status
-        const values = Object.keys(counts);
-        const looksLikeStatus = values.some(v => 
-          /^(ENT|FOL|BAN|FAL|ATE|FER|ENTREGUE?|FOLGA?|FALTA?)$/i.test(v.trim())
-        );
-        
-        if (!looksLikeStatus && uniqueCount < minUnique && uniqueCount > 1) {
-          minUnique = uniqueCount;
-          bestCol = colName;
-        }
-      }
-    }
+    // Para RDA, usa coluna de status
+    const catCol = rdaInfo.isRDA && rdaInfo.statusColumn 
+      ? rdaInfo.statusColumn 
+      : safeCategoryColumns[0];
     
     const counts = new Map<string, number>();
     for (const r of filtered) {
-      const v = String(r[bestCol] || "(vazio)").trim();
+      let v = String(r[catCol] || "(vazio)").trim();
+      if (!v || v === "-") v = "VAZIO";
       counts.set(v, (counts.get(v) || 0) + 1);
     }
     
@@ -236,77 +389,145 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value)
         .slice(0, 10),
-      columnName: bestCol,
+      columnName: catCol,
     };
-  }, [filtered, safeCategoryColumns, safeSummary]);
+  }, [filtered, safeCategoryColumns, rdaInfo]);
 
-  // Gera dados para gráfico de barras (segunda coluna de categoria)
-  const barChartData = useMemo(() => {
-    const catCol = safeCategoryColumns[1] || safeCategoryColumns[0];
-    if (!catCol) return null;
+  // Gera dados para ranking por pessoa
+  const personChartData = useMemo(() => {
+    const personCol = rdaInfo.personColumn || safeCategoryColumns[1] || safeCategoryColumns[0];
+    if (!personCol) return null;
     
-    const numCol = safeNumericColumns[0];
+    const statusCol = rdaInfo.statusColumn;
     
-    const map = new Map<string, { category: string; count: number; sum: number }>();
+    const map = new Map<string, { name: string; total: number; entregue: number }>();
     
     for (const r of filtered) {
-      const cat = String(r[catCol] || "(vazio)").trim();
-      const cur = map.get(cat) || { category: cat, count: 0, sum: 0 };
+      const person = String(r[personCol] || "(vazio)").trim();
+      
+      // Ignora valores que parecem status
+      if (/^(ENTREGUE?|FOLGA?|FALTA?|BANCO|ATESTADO?|FER[IÉ]AS?|VAZIO|-)$/i.test(person)) continue;
+      
+      const cur = map.get(person) || { name: person, total: 0, entregue: 0 };
+      cur.total += 1;
+      
+      if (statusCol) {
+        const status = String(r[statusCol] || "").trim().toUpperCase();
+        if (status === "ENTREGUE" || status === "ENT") {
+          cur.entregue += 1;
+        }
+      }
+      
+      map.set(person, cur);
+    }
+    
+    return {
+      data: Array.from(map.values())
+        .sort((a, b) => b.entregue - a.entregue)
+        .slice(0, 10)
+        .map(item => ({ name: item.name, value: rdaInfo.isRDA ? item.entregue : item.total })),
+      columnName: personCol,
+    };
+  }, [filtered, safeCategoryColumns, rdaInfo]);
+
+  // Gera dados para entregas por equipe
+  const teamChartData = useMemo(() => {
+    const teamCol = rdaInfo.teamColumn || safeCategoryColumns[0];
+    if (!teamCol) return null;
+    
+    const statusCol = rdaInfo.statusColumn;
+    
+    const map = new Map<string, { category: string; count: number; entregue: number }>();
+    
+    for (const r of filtered) {
+      const team = String(r[teamCol] || "(vazio)").trim();
+      
+      // Ignora valores que parecem status
+      if (/^(ENTREGUE?|FOLGA?|FALTA?|BANCO|ATESTADO?|FER[IÉ]AS?|VAZIO|-)$/i.test(team)) continue;
+      
+      const cur = map.get(team) || { category: team, count: 0, entregue: 0 };
       cur.count += 1;
-      if (numCol) cur.sum += parseFloat(r[numCol]) || 0;
-      map.set(cat, cur);
+      
+      if (statusCol) {
+        const status = String(r[statusCol] || "").trim().toUpperCase();
+        if (status === "ENTREGUE" || status === "ENT") {
+          cur.entregue += 1;
+        }
+      }
+      
+      map.set(team, cur);
     }
     
     return Array.from(map.values())
       .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-  }, [filtered, safeCategoryColumns, safeNumericColumns]);
+      .slice(0, 10)
+      .map(item => ({ category: item.category, count: rdaInfo.isRDA ? item.entregue : item.count }));
+  }, [filtered, safeCategoryColumns, rdaInfo]);
 
-  // Gera dados para gráfico horizontal (terceira coluna de categoria ou texto)
-  const horizontalBarData = useMemo(() => {
-    const catCol = safeCategoryColumns[2] || 
-                   safeTextColumns[0] || 
-                   safeCategoryColumns[0];
-    if (!catCol) return null;
+  // Taxa por equipe (para RDA)
+  const teamRateData = useMemo(() => {
+    if (!rdaInfo.isRDA) return null;
+    
+    const teamCol = rdaInfo.teamColumn || safeCategoryColumns[0];
+    const statusCol = rdaInfo.statusColumn;
+    if (!teamCol || !statusCol) return null;
+    
+    const map = new Map<string, { name: string; total: number; entregue: number }>();
+    
+    for (const r of filtered) {
+      const team = String(r[teamCol] || "(vazio)").trim();
+      
+      // Ignora valores que parecem status
+      if (/^(ENTREGUE?|FOLGA?|FALTA?|BANCO|ATESTADO?|FER[IÉ]AS?|VAZIO|-)$/i.test(team)) continue;
+      
+      const cur = map.get(team) || { name: team, total: 0, entregue: 0 };
+      cur.total += 1;
+      
+      const status = String(r[statusCol] || "").trim().toUpperCase();
+      if (status === "ENTREGUE" || status === "ENT") {
+        cur.entregue += 1;
+      }
+      
+      map.set(team, cur);
+    }
+    
+    return Array.from(map.values())
+      .map(item => ({
+        name: item.name,
+        value: item.total > 0 ? Math.round((item.entregue / item.total) * 100) : 0,
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+  }, [filtered, safeCategoryColumns, rdaInfo]);
+
+  // Progress rings para status
+  const progressRings = useMemo(() => {
+    const catCol = rdaInfo.statusColumn || safeCategoryColumns[0];
+    if (!catCol) return [];
     
     const counts = new Map<string, number>();
     for (const r of filtered) {
-      const v = String(r[catCol] || "(vazio)").trim();
+      let v = String(r[catCol] || "VAZIO").trim().toUpperCase();
+      if (!v || v === "-") v = "VAZIO";
       counts.set(v, (counts.get(v) || 0) + 1);
     }
     
+    const total = filtered.length;
+    
     return Array.from(counts.entries())
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
-  }, [filtered, safeCategoryColumns, safeTextColumns]);
-
-  // Progress rings para categorias principais
-  const progressRings = useMemo(() => {
-    const catCol = safeCategoryColumns[0];
-    if (!catCol) return [];
-    
-    const counts = safeSummary.categoryCounts?.[catCol];
-    if (!counts) return [];
-    
-    const entries = Object.entries(counts) as [string, number][];
-    const total = entries.reduce((a, b) => a + b[1], 0);
-    
-    return entries
       .sort((a, b) => b[1] - a[1])
       .slice(0, 4)
       .map(([label, count]) => ({
         label,
         value: total > 0 ? Math.round((count / total) * 100) : 0,
       }));
-  }, [safeCategoryColumns, safeSummary]);
+  }, [filtered, safeCategoryColumns, rdaInfo]);
 
   const handleExport = async () => {
     setExporting(true);
     toast({ title: "Exportando...", description: "Preparando dados para download" });
     
     try {
-      // Exporta como JSON
       const exportData = {
         dataset: dataset?.name ?? 'dataset',
         exportedAt: new Date().toISOString(),
@@ -382,9 +603,9 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
             <span className="px-3 py-1 bg-accent/10 text-accent text-xs font-bold rounded-full">
               {filtered.length} registros
             </span>
-            {(safeCategoryColumns.length ?? 0) > 0 && (
+            {rdaInfo.isRDA && (
               <span className="px-3 py-1 bg-secondary/10 text-secondary text-xs font-bold rounded-full">
-                {safeCategoryColumns.length} categorias
+                📋 RDA
               </span>
             )}
           </div>
@@ -416,7 +637,7 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
       {/* Dashboard Content */}
       <div ref={dashboardRef} className="p-4 md:p-6 space-y-6 overflow-auto flex-1 bg-gradient-to-br from-background via-background to-muted/30">
         
-        {/* KPI Cards Dinâmicos */}
+        {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
           {kpis.map((kpi, idx) => (
             <KPICard
@@ -439,11 +660,11 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           kpi={selectedKPI}
         />
 
-        {/* Charts Row 1 */}
+        {/* Charts Row 1: Line + Pie */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {lineChartData && (lineChartData.length ?? 0) > 1 && (
             <ChartCard 
-              title={`Evolução por ${dataset?.detectedDateColumn ?? 'Data'}`}
+              title={rdaInfo.isRDA ? "📈 Entregas por Dia" : `Evolução por ${dataset?.detectedDateColumn ?? 'Data'}`}
               subtitle="Tendência ao longo do tempo"
               className="lg:col-span-2"
             >
@@ -453,7 +674,7 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           
           {pieChartData && (pieChartData.data.length ?? 0) > 0 && (
             <ChartCard 
-              title={`Distribuição: ${pieChartData.columnName ?? 'Categoria'}`}
+              title={rdaInfo.isRDA ? "🍩 Distribuição por Status" : `Distribuição: ${pieChartData.columnName ?? 'Categoria'}`}
               subtitle="Composição geral"
             >
               <GenericPieChart data={pieChartData.data} />
@@ -461,37 +682,46 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           )}
         </div>
 
-        {/* Charts Row 2 */}
+        {/* Charts Row 2: Person Ranking + Team + Team Rate */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {barChartData && (barChartData.length ?? 0) > 0 && (
+          {personChartData && (personChartData.data.length ?? 0) > 0 && (
             <ChartCard 
-              title={`Por ${safeCategoryColumns[1] || safeCategoryColumns[0] || "Categoria"}`}
+              title={rdaInfo.isRDA ? "👤 Ranking por Pessoa" : `Por ${personChartData.columnName ?? "Pessoa"}`}
               subtitle="Top 10 por quantidade"
             >
-              <GenericBarChart data={barChartData} />
+              <GenericHorizontalBarChart data={personChartData.data} />
             </ChartCard>
           )}
           
-          {horizontalBarData && (horizontalBarData.length ?? 0) > 0 && (
+          {teamChartData && (teamChartData.length ?? 0) > 0 && (
             <ChartCard 
-              title={`Ranking: ${safeCategoryColumns[2] || safeTextColumns[0] || "Valores"}`}
-              subtitle="Distribuição horizontal"
+              title={rdaInfo.isRDA ? "👥 Entregas por Equipe" : `Por ${rdaInfo.teamColumn || safeCategoryColumns[0] || "Categoria"}`}
+              subtitle="Distribuição por grupo"
             >
-              <GenericHorizontalBarChart data={horizontalBarData} />
+              <GenericBarChart data={teamChartData} />
             </ChartCard>
           )}
 
-          {(progressRings?.length ?? 0) > 0 && (
+          {rdaInfo.isRDA && teamRateData && (teamRateData.length ?? 0) > 0 ? (
             <ChartCard 
-              title="Métricas Rápidas"
-              subtitle={`Taxas por ${safeCategoryColumns[0] ?? 'Categoria'}`}
+              title="📊 Taxa por Equipe (%)"
+              subtitle="Percentual de entregas"
             >
-              <div className="flex flex-wrap justify-around items-center gap-4 py-4">
-                {progressRings.map((ring, idx) => (
-                  <ProgressRing key={idx} value={ring.value} label={ring.label} size="md" />
-                ))}
-              </div>
+              <GenericHorizontalBarChart data={teamRateData} />
             </ChartCard>
+          ) : (
+            (progressRings?.length ?? 0) > 0 && (
+              <ChartCard 
+                title="Métricas Rápidas"
+                subtitle={`Taxas por ${rdaInfo.statusColumn || safeCategoryColumns[0] || 'Categoria'}`}
+              >
+                <div className="flex flex-wrap justify-around items-center gap-4 py-4">
+                  {progressRings.map((ring, idx) => (
+                    <ProgressRing key={idx} value={ring.value} label={ring.label} size="md" />
+                  ))}
+                </div>
+              </ChartCard>
+            )
           )}
         </div>
 
@@ -508,14 +738,35 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
                 <span className="font-semibold truncate">{dataset.detectedDateColumn}</span>
               </div>
             )}
-            {safeNumericColumns.slice(0, 2).map((col, idx) => (
+            {rdaInfo.statusColumn && (
+              <div className="flex items-center gap-2 text-sm">
+                <CheckCircle2 className="w-4 h-4 text-primary" />
+                <span className="text-muted-foreground">Status:</span>
+                <span className="font-semibold truncate">{rdaInfo.statusColumn}</span>
+              </div>
+            )}
+            {rdaInfo.personColumn && (
+              <div className="flex items-center gap-2 text-sm">
+                <Users className="w-4 h-4 text-accent" />
+                <span className="text-muted-foreground">Pessoa:</span>
+                <span className="font-semibold truncate">{rdaInfo.personColumn}</span>
+              </div>
+            )}
+            {rdaInfo.teamColumn && (
+              <div className="flex items-center gap-2 text-sm">
+                <Briefcase className="w-4 h-4 text-secondary" />
+                <span className="text-muted-foreground">Equipe:</span>
+                <span className="font-semibold truncate">{rdaInfo.teamColumn}</span>
+              </div>
+            )}
+            {!rdaInfo.isRDA && safeNumericColumns.slice(0, 2).map((col) => (
               <div key={col} className="flex items-center gap-2 text-sm">
                 <Hash className="w-4 h-4 text-accent" />
                 <span className="text-muted-foreground">Número:</span>
                 <span className="font-semibold truncate">{col}</span>
               </div>
             ))}
-            {safeCategoryColumns.slice(0, 3).map((col, idx) => (
+            {!rdaInfo.isRDA && safeCategoryColumns.slice(0, 3).map((col) => (
               <div key={col} className="flex items-center gap-2 text-sm">
                 <Tag className="w-4 h-4 text-secondary" />
                 <span className="text-muted-foreground">Categoria:</span>
