@@ -204,13 +204,14 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
       <div ref={dashboardRef} className="p-4 md:p-6 space-y-6 overflow-auto flex-1 bg-gradient-to-br from-background via-background to-muted/30">
         
         {/* KPI Cards - 2 rows of 3 for larger cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
           <KPICard
             title="Taxa de Entrega"
             value={`${kpis.entreguesPct}%`}
             subtitle={`${kpis.entregue} de ${kpis.total} registros`}
-            icon={<Target className="w-5 h-5 text-primary" />}
+            icon={<Target className="w-4 h-4 md:w-5 md:h-5 text-primary" />}
             variant="success"
+            size="sm"
             trend={kpis.entreguesPct >= 80 ? "up" : kpis.entreguesPct >= 50 ? "neutral" : "down"}
             onClick={() => openModal("taxa")}
           />
@@ -218,39 +219,44 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
             title="Total Entregue"
             value={kpis.entregue.toLocaleString("pt-BR")}
             subtitle="Marcados como ENTREGUE"
-            icon={<CheckCircle className="w-5 h-5 text-primary" />}
+            icon={<CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-primary" />}
             variant="success"
+            size="sm"
             onClick={() => openModal("entregue")}
           />
           <KPICard
             title="Pendências"
             value={(kpis.vazio + kpis.falta).toLocaleString("pt-BR")}
             subtitle={`${kpis.vazio} vazios + ${kpis.falta} faltas`}
-            icon={<AlertCircle className="w-5 h-5 text-destructive" />}
+            icon={<AlertCircle className="w-4 h-4 md:w-5 md:h-5 text-destructive" />}
             variant="danger"
+            size="sm"
             onClick={() => openModal("pendencias")}
           />
           <KPICard
             title="Folgas"
             value={kpis.folga.toLocaleString("pt-BR")}
             subtitle="Dias de descanso"
-            icon={<Coffee className="w-5 h-5 text-accent" />}
+            icon={<Coffee className="w-4 h-4 md:w-5 md:h-5 text-accent" />}
             variant="info"
+            size="sm"
             onClick={() => openModal("folgas")}
           />
           <KPICard
-            title="Banco de Horas"
+            title="Banco Horas"
             value={kpis.banco.toLocaleString("pt-BR")}
             subtitle="Compensações registradas"
-            icon={<Clock className="w-5 h-5 text-violet-500" />}
+            icon={<Clock className="w-4 h-4 md:w-5 md:h-5 text-violet-500" />}
             variant="purple"
+            size="sm"
             onClick={() => openModal("banco")}
           />
           <KPICard
             title="Colaboradores"
             value={kpis.uniquePeople.toLocaleString("pt-BR")}
             subtitle={`Em ${kpis.uniqueTeams} equipes`}
-            icon={<Users className="w-5 h-5 text-muted-foreground" />}
+            icon={<Users className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />}
+            size="sm"
             onClick={() => openModal("pessoas")}
           />
         </div>
