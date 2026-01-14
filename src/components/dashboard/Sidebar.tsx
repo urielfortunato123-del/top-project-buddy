@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-
+import { ThemeToggle } from "@/components/ThemeToggle";
 interface SidebarProps {
   datasets: Dataset[];
   currentDataset: Dataset | null;
@@ -245,9 +245,12 @@ export function Sidebar({
 
       {/* Footer */}
       <div className="p-4 text-xs text-sidebar-muted">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-          <span>PWA Offline Ready</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            <span>PWA Offline Ready</span>
+          </div>
+          <ThemeToggle />
         </div>
       </div>
     </aside>
