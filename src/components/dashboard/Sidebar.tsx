@@ -179,6 +179,7 @@ export function Sidebar({
                       if (!availableDateRange.min || !availableDateRange.max) return false;
                       return date < availableDateRange.min || date > availableDateRange.max;
                     }}
+                    defaultMonth={availableDateRange.min || new Date()}
                     initialFocus
                     numberOfMonths={1}
                     locale={ptBR}
