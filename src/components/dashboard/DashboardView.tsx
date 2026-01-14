@@ -199,22 +199,46 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
       }));
   }, [dataset, filtered, safeNumericColumns, safeCategoryColumns]);
 
-  // Gera dados para gráfico de pizza (primeira coluna de categoria)
+  // Gera dados para gráfico de pizza (coluna de categoria com menos valores únicos - provavelmente equipe/pessoa)
   const pieChartData = useMemo(() => {
-    const catCol = safeCategoryColumns[0];
-    if (!catCol) return null;
+    if (safeCategoryColumns.length === 0) return null;
+    
+    // Encontra a coluna com menos valores únicos (geralmente representa equipe/pessoa)
+    // Evita colunas com valores tipo status (ENT, FOL, etc)
+    let bestCol = safeCategoryColumns[0];
+    let minUnique = Infinity;
+    
+    for (const colName of safeCategoryColumns) {
+      const counts = safeSummary.categoryCounts?.[colName];
+      if (counts) {
+        const uniqueCount = Object.keys(counts).length;
+        // Preferir colunas com menos valores únicos e que não parecem ser status
+        const values = Object.keys(counts);
+        const looksLikeStatus = values.some(v => 
+          /^(ENT|FOL|BAN|FAL|ATE|FER|ENTREGUE?|FOLGA?|FALTA?)$/i.test(v.trim())
+        );
+        
+        if (!looksLikeStatus && uniqueCount < minUnique && uniqueCount > 1) {
+          minUnique = uniqueCount;
+          bestCol = colName;
+        }
+      }
+    }
     
     const counts = new Map<string, number>();
     for (const r of filtered) {
-      const v = String(r[catCol] || "(vazio)").trim();
+      const v = String(r[bestCol] || "(vazio)").trim();
       counts.set(v, (counts.get(v) || 0) + 1);
     }
     
-    return Array.from(counts.entries())
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
-  }, [filtered, safeCategoryColumns]);
+    return {
+      data: Array.from(counts.entries())
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 10),
+      columnName: bestCol,
+    };
+  }, [filtered, safeCategoryColumns, safeSummary]);
 
   // Gera dados para gráfico de barras (segunda coluna de categoria)
   const barChartData = useMemo(() => {
@@ -427,12 +451,12 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
             </ChartCard>
           )}
           
-          {pieChartData && (pieChartData.length ?? 0) > 0 && (
+          {pieChartData && (pieChartData.data.length ?? 0) > 0 && (
             <ChartCard 
-              title={`Distribuição: ${safeCategoryColumns[0] ?? 'Categoria'}`}
+              title={`Distribuição: ${pieChartData.columnName ?? 'Categoria'}`}
               subtitle="Composição geral"
             >
-              <GenericPieChart data={pieChartData} />
+              <GenericPieChart data={pieChartData.data} />
             </ChartCard>
           )}
         </div>
