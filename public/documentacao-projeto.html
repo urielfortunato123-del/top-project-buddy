@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard RDA - Documentação Técnica</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      line-height: 1.6;
+      color: #1e293b;
+      background: #f8fafc;
+      padding: 2rem;
+    }
+    .container { max-width: 900px; margin: 0 auto; background: white; padding: 3rem; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); }
+    h1 { color: #0f172a; font-size: 2.5rem; margin-bottom: 0.5rem; border-bottom: 4px solid #3b82f6; padding-bottom: 1rem; }
+    h2 { color: #1e40af; font-size: 1.5rem; margin-top: 2.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid #e2e8f0; }
+    h3 { color: #334155; font-size: 1.2rem; margin-top: 1.5rem; margin-bottom: 0.75rem; }
+    p { margin-bottom: 1rem; color: #475569; }
+    code { background: #f1f5f9; padding: 0.2rem 0.5rem; border-radius: 4px; font-family: 'Monaco', 'Consolas', monospace; font-size: 0.9em; color: #dc2626; }
+    pre { background: #1e293b; color: #e2e8f0; padding: 1.5rem; border-radius: 8px; overflow-x: auto; margin: 1rem 0; }
+    pre code { background: none; color: #e2e8f0; padding: 0; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+    th, td { border: 1px solid #e2e8f0; padding: 0.75rem 1rem; text-align: left; }
+    th { background: #1e293b; color: white; font-weight: 600; }
+    tr:nth-child(even) { background: #f8fafc; }
+    ul, ol { margin: 1rem 0 1rem 2rem; }
+    li { margin-bottom: 0.5rem; }
+    .badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; }
+    .badge-error { background: #fef2f2; color: #dc2626; }
+    .badge-success { background: #f0fdf4; color: #16a34a; }
+    .badge-warning { background: #fffbeb; color: #d97706; }
+    .badge-info { background: #eff6ff; color: #2563eb; }
+    .alert { padding: 1rem 1.5rem; border-radius: 8px; margin: 1rem 0; }
+    .alert-warning { background: #fffbeb; border-left: 4px solid #f59e0b; }
+    .alert-error { background: #fef2f2; border-left: 4px solid #ef4444; }
+    .alert-info { background: #eff6ff; border-left: 4px solid #3b82f6; }
+    .color-box { display: inline-block; width: 20px; height: 20px; border-radius: 4px; vertical-align: middle; margin-right: 8px; border: 1px solid #e2e8f0; }
+    .file-tree { background: #1e293b; color: #e2e8f0; padding: 1.5rem; border-radius: 8px; font-family: monospace; font-size: 0.9rem; }
+    .file-tree .folder { color: #60a5fa; }
+    .file-tree .file { color: #a5b4fc; }
+    .file-tree .highlight { color: #fbbf24; font-weight: bold; }
+    .header-meta { color: #64748b; font-size: 0.9rem; margin-bottom: 2rem; }
+    @media print {
+      body { background: white; padding: 0; }
+      .container { box-shadow: none; padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎯 Dashboard RDA - Controle de Entregas</h1>
+    <p class="header-meta">Documentação Técnica para Desenvolvedores | Gerado em: <script>document.write(new Date().toLocaleDateString('pt-BR'))</script></p>
+    
+    <p>Sistema de controle de entregas offline desenvolvido em <strong>React + TypeScript</strong>. Importa planilhas Excel e gera dashboards interativos com gráficos, KPIs e exportação.</p>
+
+    <h2>🎯 Objetivo do Projeto</h2>
+    <p>Aplicação web que permite:</p>
+    <ol>
+      <li><strong>Importar</strong> planilhas Excel com dados de controle de entregas (RDA)</li>
+      <li><strong>Visualizar</strong> dashboards com KPIs, gráficos e matriz pessoa × dia</li>
+      <li><strong>Filtrar</strong> por equipe, pessoa, status e período</li>
+      <li><strong>Exportar</strong> para PDF e Excel com formatação profissional</li>
+    </ol>
+
+    <h2>🛠️ Stack Tecnológica</h2>
+    <table>
+      <thead>
+        <tr><th>Tecnologia</th><th>Versão</th><th>Uso</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>React</td><td>18.3.1</td><td>Framework UI</td></tr>
+        <tr><td>TypeScript</td><td>-</td><td>Tipagem estática</td></tr>
+        <tr><td>Vite</td><td>5.x</td><td>Build tool</td></tr>
+        <tr><td>Tailwind CSS</td><td>3.x</td><td>Estilização</td></tr>
+        <tr><td>Recharts</td><td>2.15.4</td><td>Gráficos</td></tr>
+        <tr><td>SheetJS (xlsx)</td><td>0.18.5</td><td>Parser de Excel</td></tr>
+        <tr><td>xlsx-js-style</td><td>1.2.0</td><td>Excel com estilos</td></tr>
+        <tr><td>jsPDF</td><td>4.0.0</td><td>Geração de PDF</td></tr>
+        <tr><td>html2canvas</td><td>1.4.1</td><td>Screenshot para PDF</td></tr>
+        <tr><td>idb-keyval</td><td>6.2.2</td><td>Storage local (IndexedDB)</td></tr>
+        <tr><td>date-fns</td><td>3.6.0</td><td>Manipulação de datas</td></tr>
+        <tr><td>shadcn/ui</td><td>-</td><td>Componentes UI</td></tr>
+      </tbody>
+    </table>
+
+    <h2>📁 Estrutura do Projeto</h2>
+    <div class="file-tree">
+      <span class="folder">src/</span><br>
+      ├── <span class="folder">components/</span><br>
+      │   ├── <span class="folder">dashboard/</span><br>
+      │   │   ├── <span class="file">Charts.tsx</span> — Gráficos (Line, Bar, Pie, Progress Ring)<br>
+      │   │   ├── <span class="file">DashboardView.tsx</span> — Tela principal do dashboard<br>
+      │   │   ├── <span class="file">KPICard.tsx</span> — Cards de indicadores<br>
+      │   │   ├── <span class="file">KPIDetailModal.tsx</span> — Modal com detalhes dos KPIs<br>
+      │   │   ├── <span class="file">MatrixTable.tsx</span> — Tabela matriz pessoa × dia<br>
+      │   │   ├── <span class="file">Sidebar.tsx</span> — Barra lateral com filtros<br>
+      │   │   └── <span class="file">SpreadsheetView.tsx</span> — Visão tabular dos dados<br>
+      │   └── <span class="folder">ui/</span> — Componentes shadcn/ui<br>
+      ├── <span class="folder">hooks/</span><br>
+      │   └── <span class="file">useDatasets.ts</span> — Hook para gerenciar datasets<br>
+      ├── <span class="folder">lib/</span><br>
+      │   ├── <span class="file">database.ts</span> — Storage com IndexedDB<br>
+      │   ├── <span class="file">excelParser.ts</span> — Parser de Excel para Dataset<br>
+      │   ├── <span class="highlight">excelExport.ts</span> — ⚠️ EXPORTAÇÃO EXCEL (PRECISA AJUDA)<br>
+      │   ├── <span class="file">pdfExport.ts</span> — Exportação PDF<br>
+      │   ├── <span class="file">htmlExport.ts</span> — Exportação HTML<br>
+      │   └── <span class="file">utils.ts</span> — Utilitários gerais<br>
+      ├── <span class="folder">pages/</span><br>
+      │   └── <span class="file">Index.tsx</span> — Página principal<br>
+      └── <span class="file">main.tsx</span> — Entry point
+    </div>
+
+    <h2>📊 Modelo de Dados</h2>
+    
+    <h3>Interface Dataset</h3>
+    <pre><code>interface Dataset {
+  id: string;                    // ID único gerado
+  name: string;                  // Nome do arquivo
+  createdAt: string;             // Data criação (ISO)
+  updatedAt: string;             // Data atualização (ISO)
+  rawGrid: any[][];              // Grid original do Excel
+  rows: DatasetRow[];            // Dados normalizados
+  teams: string[];               // Lista de equipes
+  people: string[];              // Lista de pessoas
+  statuses: string[];            // Lista de status
+}</code></pre>
+
+    <h3>Interface DatasetRow</h3>
+    <pre><code>interface DatasetRow {
+  date: string;    // Data no formato YYYY-MM-DD
+  person: string;  // Nome do colaborador
+  status: string;  // Status: ENTREGUE, FOLGA, BANCO DE HORAS, VAZIO
+  team?: string;   // Equipe (opcional)
+}</code></pre>
+
+    <h3>Status Possíveis</h3>
+    <table>
+      <thead><tr><th>Status</th><th>Descrição</th></tr></thead>
+      <tbody>
+        <tr><td><code>ENTREGUE</code></td><td>RDA entregue</td></tr>
+        <tr><td><code>FOLGA</code></td><td>Dia de folga</td></tr>
+        <tr><td><code>BANCO DE HORAS</code></td><td>Compensação</td></tr>
+        <tr><td><code>VAZIO</code></td><td>Sem informação</td></tr>
+        <tr><td><code>FALTA</code></td><td>Faltou</td></tr>
+        <tr><td><code>ATESTADO</code></td><td>Atestado médico</td></tr>
+        <tr><td><code>FÉRIAS</code></td><td>Em férias</td></tr>
+      </tbody>
+    </table>
+
+    <h2>📥 Formato do Excel de Entrada</h2>
+    <p>O sistema espera planilhas Excel no seguinte formato:</p>
+    <table>
+      <thead>
+        <tr><th>Linha</th><th>A (Data)</th><th>B</th><th>C</th><th>D</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td>TITULO</td><td>...</td><td>...</td><td>...</td></tr>
+        <tr><td>2</td><td>(vazio)</td><td>EQUIPE CAMPO</td><td>EQUIPE CAMPO</td><td>EQUIPE ESCRITORIO</td></tr>
+        <tr><td>3</td><td>DATA</td><td>João Silva</td><td>Maria</td><td>Pedro</td></tr>
+        <tr><td>4</td><td>01/01/2026</td><td>ENTREGUE</td><td>FOLGA</td><td>ENTREGUE</td></tr>
+        <tr><td>5</td><td>02/01/2026</td><td>ENTREGUE</td><td>ENTREGUE</td><td>BANCO</td></tr>
+      </tbody>
+    </table>
+    
+    <p><strong>Regras de Parser (<code>excelParser.ts</code>):</strong></p>
+    <ul>
+      <li><strong>Linha 2</strong>: Headers de equipe (detecta "EQUIPE")</li>
+      <li><strong>Linha 3</strong>: Nomes dos colaboradores</li>
+      <li><strong>Linha 4+</strong>: Dados (coluna A = data, demais = status)</li>
+    </ul>
+
+    <h2>📤 Exportação Excel Atual</h2>
+    <h3>Arquivo: <code>src/lib/excelExport.ts</code></h3>
+    <p>Atualmente gera 7 abas:</p>
+    <ol>
+      <li><strong>Matriz</strong> — Pessoa × Dia com chips (ENT/FOL/BAN/-)</li>
+      <li><strong>KPIs</strong> — Indicadores principais</li>
+      <li><strong>Ranking</strong> — Colaboradores ordenados por entrega</li>
+      <li><strong>Equipes</strong> — Análise por equipe</li>
+      <li><strong>Por Dia</strong> — Evolução diária</li>
+      <li><strong>Dados</strong> — Registros completos</li>
+      <li><strong>PowerBI</strong> — Formato flat para Pivot</li>
+    </ol>
+
+    <div class="alert alert-error">
+      <h3>⚠️ PROBLEMA ATUAL</h3>
+      <p>O usuário precisa de <strong>formatação condicional RGB real</strong> nas células do Excel, similar ao que faria no Power BI.</p>
+    </div>
+
+    <h3>Requisitos não atendidos:</h3>
+    <ul>
+      <li><span class="badge badge-error">❌</span> Cores RGB aplicadas corretamente nas células</li>
+      <li><span class="badge badge-error">❌</span> Formatação condicional dinâmica baseada em valores</li>
+      <li><span class="badge badge-error">❌</span> Gráficos embutidos no Excel (barras, pizza)</li>
+      <li><span class="badge badge-error">❌</span> Tabelas dinâmicas pré-configuradas</li>
+      <li><span class="badge badge-error">❌</span> Compatibilidade total com Power BI</li>
+    </ul>
+
+    <h3>Tentativa atual:</h3>
+    <ul>
+      <li>Usa biblioteca <code>xlsx-js-style</code> para aplicar estilos</li>
+      <li>Cores definidas em objeto <code>COLORS</code> com valores hex</li>
+      <li>Funções <code>createStyle()</code>, <code>getStatusStyle()</code>, <code>getEvaluationStyle()</code></li>
+      <li>Aplica estilos célula a célula com <code>applyCellStyle()</code></li>
+    </ul>
+
+    <div class="alert alert-warning">
+      <strong>Erro de build:</strong><br>
+      <code>Assets exceeding the limit: assets/index-CFaIROXZ.js is 2.79 MB</code><br>
+      A biblioteca <code>xlsx-js-style</code> é muito pesada e causa erro no PWA.
+    </div>
+
+    <h2>🎨 Sistema de Cores</h2>
+    
+    <h3>Paleta de Status</h3>
+    <table>
+      <thead><tr><th>Status</th><th>Cor</th><th>Hex BG</th><th>Hex FG</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>ENTREGUE</td>
+          <td><span class="color-box" style="background:#22C55E"></span>Verde</td>
+          <td><code>22C55E</code></td>
+          <td><code>FFFFFF</code></td>
+        </tr>
+        <tr>
+          <td>FOLGA</td>
+          <td><span class="color-box" style="background:#3B82F6"></span>Azul</td>
+          <td><code>3B82F6</code></td>
+          <td><code>FFFFFF</code></td>
+        </tr>
+        <tr>
+          <td>BANCO DE HORAS</td>
+          <td><span class="color-box" style="background:#F59E0B"></span>Âmbar</td>
+          <td><code>F59E0B</code></td>
+          <td><code>000000</code></td>
+        </tr>
+        <tr>
+          <td>VAZIO</td>
+          <td><span class="color-box" style="background:#EF4444"></span>Vermelho</td>
+          <td><code>EF4444</code></td>
+          <td><code>FFFFFF</code></td>
+        </tr>
+        <tr>
+          <td>HEADER</td>
+          <td><span class="color-box" style="background:#1E293B"></span>Slate escuro</td>
+          <td><code>1E293B</code></td>
+          <td><code>FFFFFF</code></td>
+        </tr>
+        <tr>
+          <td>TITLE</td>
+          <td><span class="color-box" style="background:#0F172A"></span>Slate mais escuro</td>
+          <td><code>0F172A</code></td>
+          <td><code>FFFFFF</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Paleta de Avaliação (baseado em %)</h3>
+    <table>
+      <thead><tr><th>Avaliação</th><th>Condição</th><th>Cor</th><th>Hex BG</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Excelente</td>
+          <td>≥ 80%</td>
+          <td><span class="color-box" style="background:#16A34A"></span>Verde 600</td>
+          <td><code>16A34A</code></td>
+        </tr>
+        <tr>
+          <td>Bom</td>
+          <td>≥ 60%</td>
+          <td><span class="color-box" style="background:#2563EB"></span>Azul 600</td>
+          <td><code>2563EB</code></td>
+        </tr>
+        <tr>
+          <td>Regular</td>
+          <td>≥ 40%</td>
+          <td><span class="color-box" style="background:#D97706"></span>Âmbar 600</td>
+          <td><code>D97706</code></td>
+        </tr>
+        <tr>
+          <td>Crítico</td>
+          <td>&lt; 40%</td>
+          <td><span class="color-box" style="background:#DC2626"></span>Vermelho 600</td>
+          <td><code>DC2626</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>🔧 O que precisa ser feito</h2>
+
+    <h3>1. Corrigir Exportação Excel com Cores</h3>
+    <p><strong>Objetivo:</strong> Gerar Excel <code>.xlsx</code> com:</p>
+    <ul>
+      <li>Células coloridas RGB baseado no status</li>
+      <li>Headers com estilo (negrito, cor de fundo)</li>
+      <li>Formatação condicional para taxa de entrega</li>
+    </ul>
+    
+    <p><strong>Opções:</strong></p>
+    <ul>
+      <li>Usar <code>xlsx-js-style</code> corretamente (verificar sintaxe)</li>
+      <li>Usar <strong>ExcelJS</strong> (mais completo mas maior)</li>
+      <li>Gerar via template <code>.xltx</code></li>
+      <li>Criar API backend para gerar Excel (requer Supabase)</li>
+    </ul>
+
+    <h3>2. Adicionar Gráficos ao Excel (Opcional)</h3>
+    <p>A biblioteca <code>xlsx</code> padrão não suporta criação de gráficos. Alternativas:</p>
+    <ul>
+      <li>Usar ExcelJS com charts</li>
+      <li>Gerar template com gráficos pré-vinculados</li>
+      <li>Criar Excel via backend (Python openpyxl, C# EPPlus)</li>
+    </ul>
+
+    <h3>3. Compatibilidade Power BI</h3>
+    <p>A aba "PowerBI" já exporta dados flat. Para melhorar:</p>
+    <ul>
+      <li>Adicionar metadados de tipo de dados</li>
+      <li>Formatar datas como ISO</li>
+      <li>Criar relacionamentos sugeridos</li>
+    </ul>
+
+    <h2>🚀 Como Executar Localmente</h2>
+    <pre><code># Instalar dependências
+npm install
+
+# Rodar em desenvolvimento
+npm run dev
+
+# Build de produção
+npm run build
+
+# Preview do build
+npm run preview</code></pre>
+
+    <h2>🧪 Como Testar a Exportação</h2>
+    <ol>
+      <li>Acesse a aplicação</li>
+      <li>Importe um Excel de controle de entregas</li>
+      <li>Clique em "Exportar Excel"</li>
+      <li>Abra o arquivo <code>.xlsx</code> gerado</li>
+      <li>Verifique as abas e formatação</li>
+    </ol>
+
+    <h2>📋 Arquivos Importantes para Edição</h2>
+    <table>
+      <thead><tr><th>Arquivo</th><th>Função</th></tr></thead>
+      <tbody>
+        <tr><td><code>src/lib/excelExport.ts</code></td><td><span class="badge badge-error">PRINCIPAL</span> Lógica de exportação Excel</td></tr>
+        <tr><td><code>src/lib/excelParser.ts</code></td><td>Parser de Excel para Dataset</td></tr>
+        <tr><td><code>src/lib/database.ts</code></td><td>Interfaces e storage</td></tr>
+        <tr><td><code>src/components/dashboard/DashboardView.tsx</code></td><td>Botões de exportação</td></tr>
+        <tr><td><code>vite.config.ts</code></td><td>Config do PWA (limite de cache)</td></tr>
+      </tbody>
+    </table>
+
+    <h2>🐛 Erros Conhecidos</h2>
+    
+    <div class="alert alert-warning">
+      <strong>1. Bundle muito grande</strong><br>
+      <code>Assets exceeding the limit: 2.79 MB</code><br>
+      <strong>Causa:</strong> <code>xlsx-js-style</code> é pesado<br>
+      <strong>Solução:</strong> Usar dynamic import ou remover lib
+    </div>
+
+    <div class="alert alert-info">
+      <strong>2. Stack overflow no build</strong><br>
+      <code>runtime: goroutine stack exceeds 1000000000-byte limit</code><br>
+      <strong>Causa:</strong> Erro do TypeScript checker (temporário)<br>
+      <strong>Solução:</strong> Geralmente resolve ao rebuildar
+    </div>
+
+    <h2>🔗 Links Úteis</h2>
+    <ul>
+      <li><a href="https://docs.lovable.dev" target="_blank">Lovable Docs</a></li>
+      <li><a href="https://github.com/gitbrent/xlsx-js-style" target="_blank">xlsx-js-style</a></li>
+      <li><a href="https://github.com/exceljs/exceljs" target="_blank">ExcelJS (alternativa)</a></li>
+      <li><a href="https://recharts.org" target="_blank">Recharts</a></li>
+    </ul>
+
+    <h2>📞 Suporte</h2>
+    <p>Para funcionalidades avançadas de Excel (gráficos embutidos, VBA, templates complexos), pode ser necessário:</p>
+    <ul>
+      <li>Desenvolvedor especializado em OpenXML/Excel</li>
+      <li>Backend em Python (openpyxl) ou C# (EPPlus) para geração server-side</li>
+    </ul>
+
+    <hr style="margin: 2rem 0; border: none; border-top: 2px solid #e2e8f0;">
+    <p style="text-align: center; color: #94a3b8; font-size: 0.9rem;">
+      Documentação gerada automaticamente | Dashboard RDA - Controle de Entregas<br>
+      Projeto hospedado no <a href="https://lovable.dev" target="_blank">Lovable.dev</a>
+    </p>
+  </div>
+</body>
+</html>
