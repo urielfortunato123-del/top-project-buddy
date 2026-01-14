@@ -78,6 +78,39 @@ function generateHTML(dataset: Dataset, allRows: GenericRow[]): string {
       --radius: 16px;
     }
     
+    [data-theme="dark"] {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --border: #334155;
+      --shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+    
+    /* Theme toggle */
+    .theme-toggle {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      padding: 8px 16px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      color: white;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      backdrop-filter: blur(10px);
+      transition: all 0.3s;
+    }
+    .theme-toggle:hover {
+      background: rgba(255,255,255,0.3);
+      transform: scale(1.05);
+    }
+    .theme-toggle .icon {
+      font-size: 16px;
+    }
+    
     * { box-sizing: border-box; margin: 0; padding: 0; }
     
     body { 
@@ -355,7 +388,7 @@ function generateHTML(dataset: Dataset, allRows: GenericRow[]): string {
       user-select: none;
       white-space: nowrap;
     }
-    th:hover { background: #e2e8f0; }
+    th:hover { background: var(--border); }
     th.sorted { color: var(--primary); }
     td { 
       padding: 12px 16px; 
@@ -492,6 +525,10 @@ function generateHTML(dataset: Dataset, allRows: GenericRow[]): string {
         <span class="badge">📊 ${allRows.length} registros</span>
         <span class="badge">📅 ${format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>
         <span class="badge">📁 ${allColumns.length} colunas</span>
+        <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn">
+          <span class="icon" id="theme-icon">🌙</span>
+          <span id="theme-text">Escuro</span>
+        </button>
       </div>
     </div>
   </div>
@@ -584,12 +621,65 @@ function generateHTML(dataset: Dataset, allRows: GenericRow[]): string {
     
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
+      initTheme();
       initTabs();
       initFilters();
       initSearch();
       initPerPage();
       render();
     });
+    
+    // Theme functions
+    function initTheme() {
+      const savedTheme = localStorage.getItem('dashboard-theme') || 'light';
+      document.documentElement.setAttribute('data-theme', savedTheme);
+      updateThemeButton(savedTheme);
+    }
+    
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') || 'light';
+      const newTheme = current === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', newTheme);
+      localStorage.setItem('dashboard-theme', newTheme);
+      updateThemeButton(newTheme);
+      
+      // Update charts for theme
+      setTimeout(() => {
+        Object.values(charts).forEach(chart => {
+          if (chart && chart.options) {
+            const textColor = newTheme === 'dark' ? '#f1f5f9' : '#0f172a';
+            const gridColor = newTheme === 'dark' ? '#334155' : '#e2e8f0';
+            
+            if (chart.options.plugins && chart.options.plugins.legend) {
+              chart.options.plugins.legend.labels = { color: textColor };
+            }
+            if (chart.options.scales) {
+              if (chart.options.scales.x) {
+                chart.options.scales.x.ticks = { color: textColor };
+                chart.options.scales.x.grid = { color: gridColor };
+              }
+              if (chart.options.scales.y) {
+                chart.options.scales.y.ticks = { color: textColor };
+                chart.options.scales.y.grid = { color: gridColor };
+              }
+            }
+            chart.update();
+          }
+        });
+      }, 100);
+    }
+    
+    function updateThemeButton(theme) {
+      const icon = document.getElementById('theme-icon');
+      const text = document.getElementById('theme-text');
+      if (theme === 'dark') {
+        icon.textContent = '☀️';
+        text.textContent = 'Claro';
+      } else {
+        icon.textContent = '🌙';
+        text.textContent = 'Escuro';
+      }
+    }
     
     function initTabs() {
       document.querySelectorAll('.tab').forEach(tab => {
