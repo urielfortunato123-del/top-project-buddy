@@ -1,6 +1,6 @@
 /**
- * Excel Export utility - Professional styled export
- * Uses dynamic import to avoid bloating the main bundle
+ * Excel Export - usando xlsx padrão (sem estilos para evitar bug do compilador)
+ * Exporta matriz, dados, KPIs e análises em múltiplas abas
  */
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -17,11 +17,6 @@ interface ExportExcelOptions {
   };
 }
 
-function prettyStatus(s: string) {
-  if (s === "VAZIO") return "Sem Info";
-  return s;
-}
-
 function formatDayMonth(dateStr: string): string {
   const [, month, day] = dateStr.split("-");
   return `${day}/${month}`;
@@ -32,14 +27,22 @@ function statusToChip(status: string): string {
     case "ENTREGUE": return "✓ ENT";
     case "FOLGA": return "◆ FOL";
     case "BANCO DE HORAS": return "● BAN";
-    default: return "✗ ---";
+    case "FALTA": return "✗ FAL";
+    case "ATESTADO": return "⬢ ATE";
+    case "FÉRIAS": return "★ FER";
+    default: return "- ---";
   }
+}
+
+function prettyStatus(s: string) {
+  if (s === "VAZIO") return "Sem Info";
+  return s;
 }
 
 export async function exportToExcel(options: ExportExcelOptions): Promise<void> {
   const { dataset, filters } = options;
   
-  // Dynamic import to avoid bloating main bundle - use standard xlsx
+  // Dynamic import - usa xlsx padrão (estável)
   const XLSX = await import("xlsx");
   
   // Apply filters
@@ -62,6 +65,9 @@ export async function exportToExcel(options: ExportExcelOptions): Promise<void> 
   const folga = rows.filter(r => r.status === "FOLGA").length;
   const banco = rows.filter(r => r.status === "BANCO DE HORAS").length;
   const vazio = rows.filter(r => r.status === "VAZIO").length;
+  const falta = rows.filter(r => r.status === "FALTA").length;
+  const atestado = rows.filter(r => r.status === "ATESTADO").length;
+  const ferias = rows.filter(r => r.status === "FÉRIAS").length;
   const taxa = total ? Math.round((entregue / total) * 100) : 0;
   const pessoas = new Set(rows.map(r => r.person)).size;
   
@@ -113,7 +119,7 @@ export async function exportToExcel(options: ExportExcelOptions): Promise<void> 
   
   // Legend row
   matrixData.push([]);
-  matrixData.push(["LEGENDA:", "✓ ENT = Entregue", "◆ FOL = Folga", "● BAN = Banco de Horas", "✗ = Sem Info"]);
+  matrixData.push(["LEGENDA:", "✓ ENT = Entregue", "◆ FOL = Folga", "● BAN = Banco", "✗ FAL = Falta", "⬢ ATE = Atestado", "★ FER = Férias"]);
   
   const wsMatrix = XLSX.utils.aoa_to_sheet(matrixData);
   wsMatrix["!cols"] = [{ wch: 24 }, ...days.map(() => ({ wch: 10 }))];
@@ -136,6 +142,9 @@ export async function exportToExcel(options: ExportExcelOptions): Promise<void> 
     ["Pendências", vazio, "Sem informação registrada"],
     ["Dias de Folga", folga, "Status: FOLGA"],
     ["Banco de Horas", banco, "Status: BANCO DE HORAS"],
+    ["Faltas", falta, "Status: FALTA"],
+    ["Atestados", atestado, "Status: ATESTADO"],
+    ["Férias", ferias, "Status: FÉRIAS"],
     ["Colaboradores Únicos", pessoas, "Total de pessoas"],
     [],
     [],
@@ -155,14 +164,17 @@ export async function exportToExcel(options: ExportExcelOptions): Promise<void> 
   // ============================================
   // SHEET 3: RANKING COLABORADORES
   // ============================================
-  const personStats = new Map<string, { total: number; entregue: number; folga: number; banco: number; vazio: number }>();
+  const personStats = new Map<string, { total: number; entregue: number; folga: number; banco: number; vazio: number; falta: number; atestado: number; ferias: number }>();
   for (const r of rows) {
-    const cur = personStats.get(r.person) || { total: 0, entregue: 0, folga: 0, banco: 0, vazio: 0 };
+    const cur = personStats.get(r.person) || { total: 0, entregue: 0, folga: 0, banco: 0, vazio: 0, falta: 0, atestado: 0, ferias: 0 };
     cur.total++;
     if (r.status === "ENTREGUE") cur.entregue++;
     if (r.status === "FOLGA") cur.folga++;
     if (r.status === "BANCO DE HORAS") cur.banco++;
     if (r.status === "VAZIO") cur.vazio++;
+    if (r.status === "FALTA") cur.falta++;
+    if (r.status === "ATESTADO") cur.atestado++;
+    if (r.status === "FÉRIAS") cur.ferias++;
     personStats.set(r.person, cur);
   }
   
@@ -170,7 +182,7 @@ export async function exportToExcel(options: ExportExcelOptions): Promise<void> 
     ["RANKING DE COLABORADORES"],
     [`${personStats.size} colaboradores | Ordenado por entregas`],
     [],
-    ["#", "Colaborador", "Entregas", "Folgas", "Banco", "Pendente", "Total", "Taxa %", "Avaliação"],
+    ["#", "Colaborador", "Entregas", "Folgas", "Banco", "Faltas", "Atestado", "Férias", "Pendente", "Total", "Taxa %", "Avaliação"],
   ];
   
   Array.from(personStats.entries())
@@ -184,6 +196,9 @@ export async function exportToExcel(options: ExportExcelOptions): Promise<void> 
         stats.entregue,
         stats.folga,
         stats.banco,
+        stats.falta,
+        stats.atestado,
+        stats.ferias,
         stats.vazio,
         stats.total,
         taxaP,
@@ -193,7 +208,7 @@ export async function exportToExcel(options: ExportExcelOptions): Promise<void> 
   
   const wsRanking = XLSX.utils.aoa_to_sheet(rankingData);
   wsRanking["!cols"] = [
-    { wch: 4 }, { wch: 24 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 10 }, { wch: 14 }
+    { wch: 4 }, { wch: 24 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 10 }, { wch: 14 }
   ];
   XLSX.utils.book_append_sheet(wb, wsRanking, "Ranking");
   
@@ -320,6 +335,9 @@ export async function exportToExcel(options: ExportExcelOptions): Promise<void> 
     ["Entregue", entregue, Math.round((entregue / total) * 100) || 0],
     ["Folga", folga, Math.round((folga / total) * 100) || 0],
     ["Banco de Horas", banco, Math.round((banco / total) * 100) || 0],
+    ["Falta", falta, Math.round((falta / total) * 100) || 0],
+    ["Atestado", atestado, Math.round((atestado / total) * 100) || 0],
+    ["Férias", ferias, Math.round((ferias / total) * 100) || 0],
     ["Sem Info", vazio, Math.round((vazio / total) * 100) || 0],
   ];
   
