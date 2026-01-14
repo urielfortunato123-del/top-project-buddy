@@ -69,8 +69,8 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       output: {
         manualChunks: {
-          // Separate xlsx-js-style into its own chunk (only loaded on export)
-          'excel-export': ['xlsx-js-style'],
+          // Separate xlsx into its own chunk (only loaded on export)
+          'excel-export': ['xlsx'],
           // Separate recharts into its own chunk
           'charts': ['recharts'],
         },
