@@ -10,6 +10,55 @@ import { useDatasets } from "@/hooks/useDatasets";
 import { Button } from "@/components/ui/button";
 import type { DateRange } from "@/lib/dateRange";
 
+// Detecta a coluna que contém nomes de pessoas (mais valores únicos que não são status)
+function findBestPersonColumn(
+  categoryColumns: string[],
+  categoryCounts: Record<string, Record<string, number>>
+): string {
+  const statusPattern = /^(ENT|FOL|BAN|FAL|ATE|FER|ENTREGUE?|FOLGA?|FALTA?|ATESTADO?|FER[IÉ]AS?|BANCO|VAZIO|-)$/i;
+  
+  let bestCol = categoryColumns[0] || "";
+  let maxNonStatusValues = 0;
+  
+  for (const colName of categoryColumns) {
+    const counts = categoryCounts[colName];
+    if (!counts) continue;
+    
+    const values = Object.keys(counts);
+    const nonStatusValues = values.filter(v => !statusPattern.test(v.trim()));
+    
+    if (nonStatusValues.length > maxNonStatusValues) {
+      maxNonStatusValues = nonStatusValues.length;
+      bestCol = colName;
+    }
+  }
+  
+  return bestCol;
+}
+
+// Detecta a coluna que contém status
+function findStatusColumn(
+  categoryColumns: string[],
+  categoryCounts: Record<string, Record<string, number>>
+): string | null {
+  const statusPattern = /^(ENT|FOL|BAN|FAL|ATE|FER|ENTREGUE?|FOLGA?|FALTA?|ATESTADO?|FER[IÉ]AS?|BANCO|VAZIO|-)$/i;
+  
+  for (const colName of categoryColumns) {
+    const counts = categoryCounts[colName];
+    if (!counts) continue;
+    
+    const values = Object.keys(counts);
+    const statusValues = values.filter(v => statusPattern.test(v.trim()));
+    
+    // Se mais da metade dos valores são status, é provavelmente a coluna de status
+    if (statusValues.length > values.length * 0.3) {
+      return colName;
+    }
+  }
+  
+  return null;
+}
+
 export default function Index() {
   const {
     datasets,
@@ -189,14 +238,14 @@ export default function Index() {
       </main>
 
       {/* RIGHT: Matrix Panel - Only show in Dashboard view if we have category data */}
-      {activeDataset && activeTab === "dashboard" && (safeCategoryColumns?.length ?? 0) >= 2 && (
+      {activeDataset && activeTab === "dashboard" && (safeCategoryColumns?.length ?? 0) >= 1 && (
         <aside className="w-[520px] shrink-0 border-l bg-white overflow-hidden flex flex-col shadow-sm">
           <MatrixTable 
             rows={filteredRows}
             domainRows={activeDataset.rows}
-            rowColumn={safeCategoryColumns[1] || safeCategoryColumns[0]}
+            rowColumn={findBestPersonColumn(safeCategoryColumns, activeDataset.summary?.categoryCounts || {})}
             colColumn={activeDataset.detectedDateColumn || safeCategoryColumns[0]}
-            valueColumn={safeCategoryColumns[0]}
+            valueColumn={findStatusColumn(safeCategoryColumns, activeDataset.summary?.categoryCounts || {}) || safeCategoryColumns[0]}
           />
         </aside>
       )}
