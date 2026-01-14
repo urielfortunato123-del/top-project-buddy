@@ -77,7 +77,7 @@ function chipClass(chip: Chip): string {
 
 export function SpreadsheetView({ dataset, onDatasetUpdate }: SpreadsheetViewProps) {
   // Edit mode state
-  const [editMode, setEditMode] = useState(false);
+  const [editMode, setEditMode] = useState(true);
   const [editedGrid, setEditedGrid] = useState<unknown[][]>([]);
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
