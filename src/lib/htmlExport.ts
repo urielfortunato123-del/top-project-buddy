@@ -561,9 +561,9 @@ function generateHTML(dataset: Dataset, allRows: GenericRow[]): string {
             <select class="per-page-select" id="per-page">
               <option value="25">25 por página</option>
               <option value="50">50 por página</option>
-              <option value="100" selected>100 por página</option>
+              <option value="100">100 por página</option>
               <option value="250">250 por página</option>
-              <option value="all">Todos</option>
+              <option value="all" selected>Todos</option>
             </select>
           </div>
         </div>
@@ -606,7 +606,7 @@ function generateHTML(dataset: Dataset, allRows: GenericRow[]): string {
     // State
     let filteredRows = [...allRows];
     let currentPage = 1;
-    let perPage = 100;
+    let perPage = allRows.length; // default: mostrar tudo
     let sortColumn = null;
     let sortDir = 'asc';
     let searchTerm = '';
@@ -738,7 +738,11 @@ function generateHTML(dataset: Dataset, allRows: GenericRow[]): string {
     }
     
     function initPerPage() {
-      document.getElementById('per-page').addEventListener('change', (e) => {
+      const perPageEl = document.getElementById('per-page');
+      // garante estado inicial consistente com o select ("Todos")
+      perPage = perPageEl.value === 'all' ? filteredRows.length : parseInt(perPageEl.value);
+
+      perPageEl.addEventListener('change', (e) => {
         perPage = e.target.value === 'all' ? filteredRows.length : parseInt(e.target.value);
         currentPage = 1;
         renderTable();
