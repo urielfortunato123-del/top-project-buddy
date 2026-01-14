@@ -1,4 +1,4 @@
-/* Excel Export utility - Visual dashboard-style export with Matrix */
+/* Excel Export utility - Professional styled export with Matrix */
 import * as XLSX from "xlsx";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -25,8 +25,16 @@ function formatDayMonth(dateStr: string): string {
   return `${day}/${month}`;
 }
 
-// Status to chip label mapping
 function statusToChip(status: string): string {
+  switch (status) {
+    case "ENTREGUE": return "✅ ENT";
+    case "FOLGA": return "🟠 FOL";
+    case "BANCO DE HORAS": return "🔵 BAN";
+    default: return "⬜ -";
+  }
+}
+
+function statusToSimpleChip(status: string): string {
   switch (status) {
     case "ENTREGUE": return "ENT";
     case "FOLGA": return "FOL";
@@ -34,14 +42,6 @@ function statusToChip(status: string): string {
     default: return "-";
   }
 }
-
-// Status to color config (Excel cell colors)
-const STATUS_COLORS: Record<string, { fill: string; font: string }> = {
-  "ENTREGUE": { fill: "C6EFCE", font: "006100" }, // Green
-  "FOLGA": { fill: "FFEB9C", font: "9C5700" }, // Orange/Yellow
-  "BANCO DE HORAS": { fill: "BDD7EE", font: "1F4E79" }, // Blue
-  "VAZIO": { fill: "F2F2F2", font: "808080" }, // Gray
-};
 
 export function exportToExcel(options: ExportExcelOptions): void {
   const { dataset, filters } = options;
@@ -69,7 +69,7 @@ export function exportToExcel(options: ExportExcelOptions): void {
   const taxa = total ? Math.round((entregue / total) * 100) : 0;
   const pessoas = new Set(rows.map(r => r.person)).size;
   
-  // Get unique days and people for matrix
+  // Build matrix data
   const daysSet = new Set<string>();
   const peopleSet = new Set<string>();
   const statusMap = new Map<string, string>();
@@ -83,31 +83,32 @@ export function exportToExcel(options: ExportExcelOptions): void {
   const days = Array.from(daysSet).sort();
   const people = Array.from(peopleSet).sort();
   
-  // Get date range from data
   const dataInicio = days[0] || "-";
   const dataFim = days[days.length - 1] || "-";
   
   // Create workbook
   const wb = XLSX.utils.book_new();
   
-  // === Sheet 1: Matriz Pessoa × Dia (VISUAL PRINCIPAL) ===
-  const matrixData: (string | number)[][] = [];
+  // ============================================
+  // SHEET 1: MATRIZ PESSOA × DIA
+  // ============================================
+  const matrixData: string[][] = [];
   
-  // Title and legend
+  // Header info
   matrixData.push(
-    ["MATRIZ PESSOA × DIA", "", "", "", "", "", "", "", "LEGENDA:"],
-    ["", "", "", "", "", "", "", "", "ENT = Entregue (verde)"],
-    [dataset.name, "", "", "", "", "", "", "", "FOL = Folga (laranja)"],
-    [`${people.length} pessoas • ${days.length} dias • ${total} registros`, "", "", "", "", "", "", "", "BAN = Banco de Horas (azul)"],
-    ["", "", "", "", "", "", "", "", "  -  = Sem informação (cinza)"],
+    ["MATRIZ PESSOA × DIA - CONTROLE DE ENTREGA DE RDA"],
+    [`${people.length} pessoas • ${days.length} dias • ${total} registros`],
+    [`Período: ${formatDayMonth(dataInicio)} até ${formatDayMonth(dataFim)}`],
+    [],
+    ["LEGENDA: ✅ ENT = Entregue | 🟠 FOL = Folga | 🔵 BAN = Banco de Horas | ⬜ - = Sem Info"],
     []
   );
   
-  // Header row with days
+  // Header row with formatted dates
   const headerRow = ["Colaborador", ...days.map(d => formatDayMonth(d))];
   matrixData.push(headerRow);
   
-  // Data rows with status chips
+  // Data rows with colored emoji chips
   for (const person of people) {
     const row: string[] = [person];
     for (const day of days) {
@@ -121,49 +122,54 @@ export function exportToExcel(options: ExportExcelOptions): void {
   const wsMatrix = XLSX.utils.aoa_to_sheet(matrixData);
   
   // Set column widths
-  const matrixCols = [{ wch: 25 }]; // First column for names
+  const matrixCols: XLSX.ColInfo[] = [{ wch: 22 }];
   for (let i = 0; i < days.length; i++) {
-    matrixCols.push({ wch: 6 }); // Compact columns for chips
+    matrixCols.push({ wch: 8 });
   }
   wsMatrix["!cols"] = matrixCols;
   
-  // Apply cell styles (colors) for status chips
-  // Note: xlsx library has limited style support, but we set the data
-  // The visual styling will be text-based with the chip labels
+  // Merge title cells
+  wsMatrix["!merges"] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: Math.min(days.length, 10) } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: Math.min(days.length, 10) } },
+    { s: { r: 4, c: 0 }, e: { r: 4, c: Math.min(days.length, 10) } },
+  ];
   
-  XLSX.utils.book_append_sheet(wb, wsMatrix, "Matriz");
+  XLSX.utils.book_append_sheet(wb, wsMatrix, "📊 Matriz");
   
-  // === Sheet 2: Dashboard KPIs ===
+  // ============================================
+  // SHEET 2: DASHBOARD RESUMO
+  // ============================================
   const dashboardData: (string | number)[][] = [
-    ["╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗"],
-    ["║                                      CONTROLE DE ENTREGA DE RDA - DASHBOARD                                    ║"],
-    ["╚════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝"],
+    ["╔═══════════════════════════════════════════════════════════════════════════════════════════╗"],
+    ["║                    CONTROLE DE ENTREGA DE RDA - DASHBOARD EXECUTIVO                       ║"],
+    ["╚═══════════════════════════════════════════════════════════════════════════════════════════╝"],
     [],
-    ["📊 INFORMAÇÕES DO RELATÓRIO"],
-    ["────────────────────────────────────────────────────────────────────────────────────────────────────────────────"],
+    ["📊 INFORMAÇÕES"],
+    ["────────────────────────────────────────────────────────────────────────────────────────────"],
     ["    Dataset:", dataset.name, "", "", "    Gerado em:", format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })],
-    ["    Período:", `${formatDayMonth(dataInicio)} até ${formatDayMonth(dataFim)}`, "", "", "    Total:", `${total} registros`],
+    ["    Período:", `${formatDayMonth(dataInicio)} até ${formatDayMonth(dataFim)}`, "", "", "    Registros:", total],
     [],
     ["🔍 FILTROS APLICADOS"],
-    ["────────────────────────────────────────────────────────────────────────────────────────────────────────────────"],
+    ["────────────────────────────────────────────────────────────────────────────────────────────"],
     ["    Equipe:", filters.team === "ALL" ? "✓ Todas" : filters.team, "", "    Pessoa:", filters.person === "ALL" ? "✓ Todas" : filters.person],
-    ["    Status:", filters.status === "ALL" ? "✓ Todos" : filters.status, "", "    Período:", filters.dateFrom ? format(filters.dateFrom, "dd/MM/yyyy") : "Início", "até", filters.dateTo ? format(filters.dateTo, "dd/MM/yyyy") : "Fim"],
+    ["    Status:", filters.status === "ALL" ? "✓ Todos" : filters.status],
     [],
     [],
-    ["📈 INDICADORES PRINCIPAIS (KPIs)"],
-    ["════════════════════════════════════════════════════════════════════════════════════════════════════════════════"],
+    ["📈 KPIs PRINCIPAIS"],
+    ["═══════════════════════════════════════════════════════════════════════════════════════════"],
     [],
-    ["┌─────────────────────┬─────────────────────┬─────────────────────┬─────────────────────┬─────────────────────┬─────────────────────┐"],
-    ["│   TAXA DE ENTREGA   │   TOTAL ENTREGUE    │     PENDÊNCIAS      │       FOLGAS        │   BANCO DE HORAS    │      PESSOAS        │"],
-    ["├─────────────────────┼─────────────────────┼─────────────────────┼─────────────────────┼─────────────────────┼─────────────────────┤"],
-    [`│        ${taxa}%`.padEnd(22) + `│        ${entregue}`.padEnd(22) + `│        ${vazio}`.padEnd(22) + `│        ${folga}`.padEnd(22) + `│        ${banco}`.padEnd(22) + `│        ${pessoas}`.padEnd(22) + "│"],
-    ["├─────────────────────┼─────────────────────┼─────────────────────┼─────────────────────┼─────────────────────┼─────────────────────┤"],
-    [`│  ${entregue} de ${total} reg.`.padEnd(22) + "│  Marcados ENTREGUE".padEnd(22) + "│  Sem informação".padEnd(22) + "│  Dias de folga".padEnd(22) + "│  Compensações".padEnd(22) + "│  Colaboradores".padEnd(22) + "│"],
-    ["└─────────────────────┴─────────────────────┴─────────────────────┴─────────────────────┴─────────────────────┴─────────────────────┘"],
+    ["┌───────────────────┬───────────────────┬───────────────────┬───────────────────┬───────────────────┬───────────────────┐"],
+    ["│  ✅ TAXA ENTREGA  │  📦 ENTREGUES     │  ⚠️ PENDÊNCIAS    │  🏖️ FOLGAS        │  ⏰ BANCO HORAS   │  👥 PESSOAS       │"],
+    ["├───────────────────┼───────────────────┼───────────────────┼───────────────────┼───────────────────┼───────────────────┤"],
+    [`│       ${taxa}%`.padEnd(20) + `│       ${entregue}`.padEnd(20) + `│       ${vazio}`.padEnd(20) + `│       ${folga}`.padEnd(20) + `│       ${banco}`.padEnd(20) + `│       ${pessoas}`.padEnd(20) + "│"],
+    ["├───────────────────┼───────────────────┼───────────────────┼───────────────────┼───────────────────┼───────────────────┤"],
+    [`│  ${entregue}/${total} reg.`.padEnd(20) + "│  ENTREGUE".padEnd(20) + "│  Sem info".padEnd(20) + "│  Dias folga".padEnd(20) + "│  Compensação".padEnd(20) + "│  Únicos".padEnd(20) + "│"],
+    ["└───────────────────┴───────────────────┴───────────────────┴───────────────────┴───────────────────┴───────────────────┘"],
     [],
   ];
   
-  // Add TOP 10 Pessoas
+  // TOP 10 Pessoas
   const byPerson = new Map<string, { total: number; entregue: number }>();
   for (const r of rows) {
     const cur = byPerson.get(r.person) || { total: 0, entregue: 0 };
@@ -177,20 +183,21 @@ export function exportToExcel(options: ExportExcelOptions): void {
 
   dashboardData.push(
     [],
-    ["👤 TOP 10 COLABORADORES"],
-    ["────────────────────────────────────────────────────────────────────────────────────────────────────────────────"],
-    ["    #", "Nome", "", "", "Entregas", "Total", "Taxa", "", "Barra Visual"],
+    ["👤 TOP 10 COLABORADORES (por entregas)"],
+    ["────────────────────────────────────────────────────────────────────────────────────────────"],
+    ["    Pos", "Nome", "", "", "Entregas", "Total", "Taxa", "", "Progresso"],
+    ["    ───", "─────────────────────────────────────", "", "", "────────", "────────", "────────", "", "────────────────────"],
   );
   
   topPessoas.forEach(([pessoa, data], idx) => {
     const taxaPessoa = data.total > 0 ? Math.round((data.entregue / data.total) * 100) : 0;
-    const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : "  ";
+    const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `  ${idx + 1}º`;
     const barLen = Math.round(taxaPessoa / 5);
     const bar = "█".repeat(barLen) + "░".repeat(20 - barLen);
-    dashboardData.push([`    ${medal} ${idx + 1}º`, pessoa, "", "", data.entregue, data.total, `${taxaPessoa}%`, "", bar]);
+    dashboardData.push([`    ${medal}`, pessoa, "", "", data.entregue, data.total, `${taxaPessoa}%`, "", bar]);
   });
   
-  // Add Equipes
+  // Equipes
   const byTeam = new Map<string, { total: number; entregue: number }>();
   for (const r of rows) {
     const team = r.team || "GERAL";
@@ -205,61 +212,68 @@ export function exportToExcel(options: ExportExcelOptions): void {
     [],
     [],
     ["👥 COMPARAÇÃO DE EQUIPES (Taxa %)"],
-    ["────────────────────────────────────────────────────────────────────────────────────────────────────────────────"],
+    ["────────────────────────────────────────────────────────────────────────────────────────────"],
+    ["    #", "Equipe", "", "", "Taxa", "Entregas/Total", "", "", "Progresso"],
+    ["    ───", "─────────────────────────────────────", "", "", "────────", "──────────────", "", "", "────────────────────"],
   );
   
   equipesData.forEach(([equipe, data], idx) => {
     const taxaEquipe = data.total > 0 ? Math.round((data.entregue / data.total) * 100) : 0;
     const barLen = Math.round(taxaEquipe / 5);
     const bar = "█".repeat(barLen) + "░".repeat(20 - barLen);
-    dashboardData.push([`    #${idx + 1}`, equipe, "", "", `${taxaEquipe}%`, `(${data.entregue}/${data.total})`, "", "", bar]);
+    const statusIcon = taxaEquipe >= 80 ? "✅" : taxaEquipe >= 50 ? "🟡" : "🔴";
+    dashboardData.push([`    ${statusIcon} #${idx + 1}`, equipe, "", "", `${taxaEquipe}%`, `(${data.entregue}/${data.total})`, "", "", bar]);
   });
   
-  // Add Status Distribution
-  dashboardData.push(
-    [],
-    [],
-    ["📊 DISTRIBUIÇÃO POR STATUS"],
-    ["────────────────────────────────────────────────────────────────────────────────────────────────────────────────"],
-  );
-  
+  // Status Distribution
   const byStatus = new Map<string, number>();
   for (const r of rows) {
     byStatus.set(r.status, (byStatus.get(r.status) || 0) + 1);
   }
   
-  const statusIcons: Record<string, string> = {
-    "ENTREGUE": "🟢",
+  dashboardData.push(
+    [],
+    [],
+    ["📊 DISTRIBUIÇÃO POR STATUS"],
+    ["────────────────────────────────────────────────────────────────────────────────────────────"],
+  );
+  
+  const statusEmoji: Record<string, string> = {
+    "ENTREGUE": "✅",
     "FOLGA": "🟠",
     "BANCO DE HORAS": "🔵",
-    "VAZIO": "⚪",
+    "VAZIO": "⬜",
   };
   
   Array.from(byStatus.entries())
     .sort((a, b) => b[1] - a[1])
     .forEach(([status, qtd]) => {
       const pct = total > 0 ? Math.round((qtd / total) * 100) : 0;
-      const icon = statusIcons[status] || "⚪";
-      dashboardData.push([`    ${icon}`, prettyStatus(status), "", "", qtd, `${pct}%`]);
+      const emoji = statusEmoji[status] || "📌";
+      const barLen = Math.round(pct / 3);
+      const bar = "●".repeat(barLen) + "○".repeat(33 - barLen);
+      dashboardData.push([`    ${emoji}`, prettyStatus(status), "", "", qtd, `${pct}%`, "", "", bar]);
     });
   
   dashboardData.push(
     [],
     [],
-    ["════════════════════════════════════════════════════════════════════════════════════════════════════════════════"],
-    ["                                     Relatório gerado automaticamente                                            "],
-    ["════════════════════════════════════════════════════════════════════════════════════════════════════════════════"],
+    ["═══════════════════════════════════════════════════════════════════════════════════════════"],
+    ["                              Relatório gerado automaticamente                              "],
+    ["═══════════════════════════════════════════════════════════════════════════════════════════"],
   );
   
   const wsDashboard = XLSX.utils.aoa_to_sheet(dashboardData);
   wsDashboard["!cols"] = [
-    { wch: 8 }, { wch: 30 }, { wch: 5 }, { wch: 5 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 3 }, { wch: 25 }
+    { wch: 10 }, { wch: 35 }, { wch: 5 }, { wch: 5 }, { wch: 10 }, { wch: 14 }, { wch: 10 }, { wch: 3 }, { wch: 22 }
   ];
   
-  XLSX.utils.book_append_sheet(wb, wsDashboard, "Dashboard");
+  XLSX.utils.book_append_sheet(wb, wsDashboard, "📈 Dashboard");
   
-  // === Sheet 3: Dados Completos ===
-  const dadosHeader = ["#", "Data", "Dia/Mês", "Colaborador", "Equipe", "Status", "Status (Chip)"];
+  // ============================================
+  // SHEET 3: DADOS COMPLETOS
+  // ============================================
+  const dadosHeader = ["#", "Data", "Dia/Mês", "Colaborador", "Equipe", "Status", "Chip"];
   const dadosRows = rows.map((r, idx) => [
     idx + 1,
     r.date,
@@ -272,19 +286,18 @@ export function exportToExcel(options: ExportExcelOptions): void {
   
   const wsDados = XLSX.utils.aoa_to_sheet([
     ["DADOS FILTRADOS - " + total + " registros"],
-    ["Período: " + formatDayMonth(dataInicio) + " até " + formatDayMonth(dataFim)],
+    [`Período: ${formatDayMonth(dataInicio)} até ${formatDayMonth(dataFim)}`],
     [],
     dadosHeader,
     ...dadosRows
   ]);
-  wsDados["!cols"] = [{ wch: 6 }, { wch: 12 }, { wch: 8 }, { wch: 25 }, { wch: 18 }, { wch: 15 }, { wch: 8 }];
+  wsDados["!cols"] = [{ wch: 6 }, { wch: 12 }, { wch: 8 }, { wch: 25 }, { wch: 18 }, { wch: 14 }, { wch: 10 }];
   
-  XLSX.utils.book_append_sheet(wb, wsDados, "Dados");
+  XLSX.utils.book_append_sheet(wb, wsDados, "📋 Dados");
   
-  // === Sheet 4: Análise por Pessoa ===
-  const pessoaHeader = ["#", "Colaborador", "Total", "ENT", "FOL", "BAN", "Pend", "Taxa (%)"];
-  const pessoaRows: (string | number)[][] = [];
-  
+  // ============================================
+  // SHEET 4: POR PESSOA
+  // ============================================
   const personStats = new Map<string, { total: number; entregue: number; folga: number; banco: number; vazio: number }>();
   for (const r of rows) {
     const cur = personStats.get(r.person) || { total: 0, entregue: 0, folga: 0, banco: 0, vazio: 0 };
@@ -296,9 +309,14 @@ export function exportToExcel(options: ExportExcelOptions): void {
     personStats.set(r.person, cur);
   }
   
+  const pessoaHeader = ["#", "Colaborador", "Total", "✅ ENT", "🟠 FOL", "🔵 BAN", "⬜ Pend", "Taxa", "Status"];
+  const pessoaRows: (string | number)[][] = [];
+  
   Array.from(personStats.entries())
     .sort((a, b) => b[1].entregue - a[1].entregue)
     .forEach(([pessoa, stats], idx) => {
+      const taxaP = stats.total > 0 ? Math.round((stats.entregue / stats.total) * 100) : 0;
+      const statusIcon = taxaP >= 80 ? "✅ Excelente" : taxaP >= 50 ? "🟡 Regular" : "🔴 Crítico";
       pessoaRows.push([
         idx + 1,
         pessoa,
@@ -307,7 +325,8 @@ export function exportToExcel(options: ExportExcelOptions): void {
         stats.folga,
         stats.banco,
         stats.vazio,
-        stats.total > 0 ? `${Math.round((stats.entregue / stats.total) * 100)}%` : "0%"
+        `${taxaP}%`,
+        statusIcon
       ]);
     });
   
@@ -318,14 +337,13 @@ export function exportToExcel(options: ExportExcelOptions): void {
     pessoaHeader,
     ...pessoaRows
   ]);
-  wsPessoa["!cols"] = [{ wch: 5 }, { wch: 25 }, { wch: 8 }, { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 10 }];
+  wsPessoa["!cols"] = [{ wch: 5 }, { wch: 25 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 14 }];
   
-  XLSX.utils.book_append_sheet(wb, wsPessoa, "Por Pessoa");
+  XLSX.utils.book_append_sheet(wb, wsPessoa, "👤 Por Pessoa");
   
-  // === Sheet 5: Análise por Equipe ===
-  const equipeHeader = ["#", "Equipe", "Total", "ENT", "FOL", "BAN", "Pend", "Taxa (%)", "Status"];
-  const equipeRows: (string | number)[][] = [];
-  
+  // ============================================
+  // SHEET 5: POR EQUIPE
+  // ============================================
   const teamStats = new Map<string, { total: number; entregue: number; folga: number; banco: number; vazio: number }>();
   for (const r of rows) {
     const team = r.team || "GERAL";
@@ -338,11 +356,14 @@ export function exportToExcel(options: ExportExcelOptions): void {
     teamStats.set(team, cur);
   }
   
+  const equipeHeader = ["#", "Equipe", "Total", "✅ ENT", "🟠 FOL", "🔵 BAN", "⬜ Pend", "Taxa", "Status"];
+  const equipeRows: (string | number)[][] = [];
+  
   Array.from(teamStats.entries())
     .sort((a, b) => b[1].entregue - a[1].entregue)
     .forEach(([equipe, stats], idx) => {
       const taxaEq = stats.total > 0 ? Math.round((stats.entregue / stats.total) * 100) : 0;
-      const statusLabel = taxaEq >= 80 ? "🟢 Excelente" : taxaEq >= 50 ? "🟡 Regular" : "🔴 Crítico";
+      const statusIcon = taxaEq >= 80 ? "✅ Excelente" : taxaEq >= 50 ? "🟡 Regular" : "🔴 Crítico";
       equipeRows.push([
         idx + 1,
         equipe,
@@ -352,7 +373,7 @@ export function exportToExcel(options: ExportExcelOptions): void {
         stats.banco,
         stats.vazio,
         `${taxaEq}%`,
-        statusLabel
+        statusIcon
       ]);
     });
   
@@ -363,11 +384,13 @@ export function exportToExcel(options: ExportExcelOptions): void {
     equipeHeader,
     ...equipeRows
   ]);
-  wsEquipe["!cols"] = [{ wch: 5 }, { wch: 20 }, { wch: 8 }, { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 10 }, { wch: 12 }];
+  wsEquipe["!cols"] = [{ wch: 5 }, { wch: 20 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 14 }];
   
-  XLSX.utils.book_append_sheet(wb, wsEquipe, "Por Equipe");
+  XLSX.utils.book_append_sheet(wb, wsEquipe, "👥 Por Equipe");
   
-  // === Sheet 6: Por Dia ===
+  // ============================================
+  // SHEET 6: POR DIA
+  // ============================================
   const byDay = new Map<string, { total: number; entregue: number; folga: number; banco: number; vazio: number }>();
   for (const r of rows) {
     const cur = byDay.get(r.date) || { total: 0, entregue: 0, folga: 0, banco: 0, vazio: 0 };
@@ -379,7 +402,7 @@ export function exportToExcel(options: ExportExcelOptions): void {
     byDay.set(r.date, cur);
   }
   
-  const diaHeader = ["#", "Data", "Dia/Mês", "Total", "ENT", "FOL", "BAN", "Pend", "Taxa (%)"];
+  const diaHeader = ["#", "Data", "Dia/Mês", "Total", "✅ ENT", "🟠 FOL", "🔵 BAN", "⬜ Pend", "Taxa"];
   const diaRows: (string | number)[][] = [];
   
   Array.from(byDay.entries())
@@ -405,9 +428,9 @@ export function exportToExcel(options: ExportExcelOptions): void {
     diaHeader,
     ...diaRows
   ]);
-  wsDia["!cols"] = [{ wch: 5 }, { wch: 12 }, { wch: 8 }, { wch: 8 }, { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 10 }];
+  wsDia["!cols"] = [{ wch: 5 }, { wch: 12 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }];
   
-  XLSX.utils.book_append_sheet(wb, wsDia, "Por Dia");
+  XLSX.utils.book_append_sheet(wb, wsDia, "📅 Por Dia");
   
   // Download file
   const fileName = `dashboard_${dataset.name.replace(/[^a-zA-Z0-9]/g, "_")}_${format(new Date(), "yyyy-MM-dd_HHmm")}.xlsx`;
