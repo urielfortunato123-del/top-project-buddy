@@ -3,6 +3,8 @@ import { Download } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { DashboardView } from "@/components/dashboard/DashboardView";
 import { MatrixTable } from "@/components/dashboard/MatrixTable";
+import { SpreadsheetView } from "@/components/dashboard/SpreadsheetView";
+import { ViewTabs } from "@/components/dashboard/ViewTabs";
 import { useDatasets } from "@/hooks/useDatasets";
 import { Button } from "@/components/ui/button";
 
@@ -25,6 +27,7 @@ export default function Index() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [teamFilter, setTeamFilter] = useState("ALL");
   const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
+  const [activeTab, setActiveTab] = useState<"dashboard" | "planilha">("dashboard");
 
   // Get available date range from dataset
   const availableDateRange = useMemo(() => {
@@ -144,24 +147,31 @@ export default function Index() {
                   </Button>
                 )}
               </div>
+              
+              {/* Tab Switcher */}
+              <ViewTabs value={activeTab} onChange={setActiveTab} />
             </header>
 
-            {/* Dashboard Content */}
-            <div className="flex-1 overflow-hidden">
-              <DashboardView 
-                dataset={currentDataset} 
-                personFilter={personFilter} 
-                statusFilter={statusFilter} 
-                teamFilter={teamFilter} 
-                dateRange={dateRange} 
-              />
-            </div>
+            {/* Content based on active tab */}
+            {activeTab === "dashboard" ? (
+              <div className="flex-1 overflow-hidden">
+                <DashboardView 
+                  dataset={currentDataset} 
+                  personFilter={personFilter} 
+                  statusFilter={statusFilter} 
+                  teamFilter={teamFilter} 
+                  dateRange={dateRange} 
+                />
+              </div>
+            ) : (
+              <SpreadsheetView dataset={currentDataset} />
+            )}
           </>
         )}
       </main>
 
-      {/* RIGHT: Matrix Panel */}
-      {currentDataset && (
+      {/* RIGHT: Matrix Panel - Only show in Dashboard view */}
+      {currentDataset && activeTab === "dashboard" && (
         <aside className="w-[520px] shrink-0 border-l bg-white overflow-hidden flex flex-col shadow-sm">
           <MatrixTable rows={filteredRows} />
         </aside>
