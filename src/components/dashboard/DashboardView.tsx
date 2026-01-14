@@ -1,9 +1,12 @@
-import React, { useMemo, useState } from "react";
-import { CheckCircle, AlertCircle, Coffee, Clock, Users, TrendingUp } from "lucide-react";
-import type { Dataset, DatasetRow } from "@/lib/database";
+import React, { useMemo, useState, useRef } from "react";
+import { CheckCircle, AlertCircle, Coffee, Clock, Users, TrendingUp, FileDown, Loader2 } from "lucide-react";
+import type { Dataset } from "@/lib/database";
 import type { DateRange } from "@/pages/Index";
 import { KPICard } from "./KPICard";
 import { KPIDetailModal, type KPIType } from "./KPIDetailModal";
+import { Button } from "@/components/ui/button";
+import { toast } from "@/hooks/use-toast";
+import { exportDashboardToPDF } from "@/lib/pdfExport";
 import {
   ChartCard,
   DeliveryLineChart,
@@ -30,11 +33,12 @@ function prettyStatus(s: string) {
 export function DashboardView({ dataset, personFilter, statusFilter, teamFilter, dateRange }: DashboardViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<KPIType>("taxa");
+  const [exporting, setExporting] = useState(false);
+  const dashboardRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(() => {
     let data = dataset.rows;
     
-    // Date range filter
     if (dateRange.from) {
       const fromStr = dateRange.from.toISOString().slice(0, 10);
       data = data.filter((r) => r.date >= fromStr);
@@ -116,6 +120,33 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     setModalOpen(true);
   };
 
+  const handleExportPDF = async () => {
+    if (!dashboardRef.current) return;
+    
+    setExporting(true);
+    toast({ title: "Gerando PDF...", description: "Aguarde enquanto capturamos o dashboard" });
+
+    try {
+      await exportDashboardToPDF({
+        element: dashboardRef.current,
+        datasetName: dataset.name,
+        filters: {
+          team: teamFilter,
+          person: personFilter,
+          status: statusFilter,
+          dateFrom: dateRange.from,
+          dateTo: dateRange.to,
+        },
+      });
+      toast({ title: "PDF exportado com sucesso!" });
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      toast({ title: "Erro ao exportar PDF", variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (filtered.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -129,106 +160,120 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
   }
 
   return (
-    <div className="p-4 space-y-4 overflow-auto">
-      {/* KPIs Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-        <KPICard
-          title="Taxa de Entrega"
-          value={`${kpis.entreguesPct}%`}
-          subtitle={`${kpis.entregue} de ${kpis.total} registros`}
-          icon={<TrendingUp className="w-5 h-5 text-primary" />}
-          variant="success"
-          onClick={() => openModal("taxa")}
-        />
-        <KPICard
-          title="Total Entregue"
-          value={kpis.entregue}
-          subtitle="Marcados como ENTREGUE"
-          icon={<CheckCircle className="w-5 h-5 text-primary" />}
-          variant="success"
-          onClick={() => openModal("entregue")}
-        />
-        <KPICard
-          title="Pendências"
-          value={kpis.vazio}
-          subtitle="Sem informação lançada"
-          icon={<AlertCircle className="w-5 h-5 text-secondary" />}
-          variant="warning"
-          onClick={() => openModal("pendencias")}
-        />
-        <KPICard
-          title="Folgas"
-          value={kpis.folga}
-          subtitle="Dias de folga"
-          icon={<Coffee className="w-5 h-5 text-accent" />}
-          variant="info"
-          onClick={() => openModal("folgas")}
-        />
-        <KPICard
-          title="Banco de Horas"
-          value={kpis.banco}
-          subtitle="Compensações"
-          icon={<Clock className="w-5 h-5 text-purple-500" />}
-          onClick={() => openModal("banco")}
-        />
-        <KPICard
-          title="Pessoas"
-          value={kpis.uniquePeople}
-          subtitle="Colaboradores únicos"
-          icon={<Users className="w-5 h-5 text-muted-foreground" />}
-          onClick={() => openModal("pessoas")}
-        />
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="flex items-center justify-end p-2 border-b bg-card shrink-0">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleExportPDF}
+          disabled={exporting}
+          className="gap-2"
+        >
+          {exporting ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <FileDown className="w-4 h-4" />
+          )}
+          Exportar PDF
+        </Button>
       </div>
 
-      {/* Modal for KPI details */}
-      <KPIDetailModal
-        open={modalOpen}
-        onOpenChange={setModalOpen}
-        type={modalType}
-        data={filtered}
-        kpis={kpis}
-      />
-
-      {/* Charts Row 1 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <ChartCard title="Entregas por Dia" className="lg:col-span-2">
-          <DeliveryLineChart data={seriesByDay} />
-        </ChartCard>
-        
-        <ChartCard title="Distribuição por Status">
-          <StatusPieChart data={pieByStatus} />
-        </ChartCard>
-      </div>
-
-      {/* Charts Row 2 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <ChartCard title="Ranking por Pessoa">
-          <PersonBarChart data={barByPerson} />
-        </ChartCard>
-        
-        <ChartCard title="Entregas por Equipe">
-          <TeamBarChart data={barByTeam} />
-        </ChartCard>
-
-        <ChartCard title="Comparação de Equipes (Taxa %)">
-          <TeamComparisonChart data={teamComparison} />
-        </ChartCard>
-      </div>
-
-      {/* Progress Rings */}
-      <ChartCard title="Métricas Rápidas">
-        <div className="flex flex-wrap justify-around gap-4 py-4">
-          <ProgressRing value={kpis.entreguesPct} label="Taxa Entrega" />
-          <ProgressRing 
-            value={kpis.total ? Math.round((kpis.folga / kpis.total) * 100) : 0} 
-            label="Taxa Folga" 
+      <div ref={dashboardRef} className="p-4 space-y-4 overflow-auto flex-1 bg-background">
+        <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+          <KPICard
+            title="Taxa de Entrega"
+            value={`${kpis.entreguesPct}%`}
+            subtitle={`${kpis.entregue} de ${kpis.total} registros`}
+            icon={<TrendingUp className="w-5 h-5 text-primary" />}
+            variant="success"
+            onClick={() => openModal("taxa")}
           />
-          <ProgressRing 
-            value={kpis.total ? Math.round((kpis.vazio / kpis.total) * 100) : 0} 
-            label="Pendências" 
+          <KPICard
+            title="Total Entregue"
+            value={kpis.entregue}
+            subtitle="Marcados como ENTREGUE"
+            icon={<CheckCircle className="w-5 h-5 text-primary" />}
+            variant="success"
+            onClick={() => openModal("entregue")}
+          />
+          <KPICard
+            title="Pendencias"
+            value={kpis.vazio}
+            subtitle="Sem informacao lancada"
+            icon={<AlertCircle className="w-5 h-5 text-secondary" />}
+            variant="warning"
+            onClick={() => openModal("pendencias")}
+          />
+          <KPICard
+            title="Folgas"
+            value={kpis.folga}
+            subtitle="Dias de folga"
+            icon={<Coffee className="w-5 h-5 text-accent" />}
+            variant="info"
+            onClick={() => openModal("folgas")}
+          />
+          <KPICard
+            title="Banco de Horas"
+            value={kpis.banco}
+            subtitle="Compensacoes"
+            icon={<Clock className="w-5 h-5 text-purple-500" />}
+            onClick={() => openModal("banco")}
+          />
+          <KPICard
+            title="Pessoas"
+            value={kpis.uniquePeople}
+            subtitle="Colaboradores unicos"
+            icon={<Users className="w-5 h-5 text-muted-foreground" />}
+            onClick={() => openModal("pessoas")}
           />
         </div>
-      </ChartCard>
+
+        <KPIDetailModal
+          open={modalOpen}
+          onOpenChange={setModalOpen}
+          type={modalType}
+          data={filtered}
+          kpis={kpis}
+        />
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <ChartCard title="Entregas por Dia" className="lg:col-span-2">
+            <DeliveryLineChart data={seriesByDay} />
+          </ChartCard>
+          
+          <ChartCard title="Distribuicao por Status">
+            <StatusPieChart data={pieByStatus} />
+          </ChartCard>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <ChartCard title="Ranking por Pessoa">
+            <PersonBarChart data={barByPerson} />
+          </ChartCard>
+          
+          <ChartCard title="Entregas por Equipe">
+            <TeamBarChart data={barByTeam} />
+          </ChartCard>
+
+          <ChartCard title="Comparacao de Equipes (Taxa %)">
+            <TeamComparisonChart data={teamComparison} />
+          </ChartCard>
+        </div>
+
+        <ChartCard title="Metricas Rapidas">
+          <div className="flex flex-wrap justify-around gap-4 py-4">
+            <ProgressRing value={kpis.entreguesPct} label="Taxa Entrega" />
+            <ProgressRing 
+              value={kpis.total ? Math.round((kpis.folga / kpis.total) * 100) : 0} 
+              label="Taxa Folga" 
+            />
+            <ProgressRing 
+              value={kpis.total ? Math.round((kpis.vazio / kpis.total) * 100) : 0} 
+              label="Pendencias" 
+            />
+          </div>
+        </ChartCard>
+      </div>
     </div>
   );
 }
