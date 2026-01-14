@@ -1,5 +1,8 @@
 import React, { useMemo, useState, useRef } from "react";
-import { CheckCircle, AlertCircle, Coffee, Clock, Users, TrendingUp, FileDown, Loader2, FileSpreadsheet } from "lucide-react";
+import { 
+  CheckCircle, AlertCircle, Coffee, Clock, Users, TrendingUp, 
+  FileDown, Loader2, FileSpreadsheet, Calendar, Target, Award 
+} from "lucide-react";
 import type { Dataset } from "@/lib/database";
 import type { DateRange } from "@/lib/dateRange";
 import { KPICard } from "./KPICard";
@@ -61,10 +64,13 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     const folga = filtered.filter((r) => r.status === "FOLGA").length;
     const banco = filtered.filter((r) => r.status === "BANCO DE HORAS").length;
     const vazio = filtered.filter((r) => r.status === "VAZIO").length;
+    const falta = filtered.filter((r) => r.status === "FALTA").length;
     const entreguesPct = total ? Math.round((entregue / total) * 100) : 0;
     const uniquePeople = new Set(filtered.map((r) => r.person)).size;
+    const uniqueDays = new Set(filtered.map((r) => r.date)).size;
+    const uniqueTeams = new Set(filtered.map((r) => r.team)).size;
     
-    return { total, entregue, folga, banco, vazio, entreguesPct, uniquePeople };
+    return { total, entregue, folga, banco, vazio, falta, entreguesPct, uniquePeople, uniqueDays, uniqueTeams };
   }, [filtered]);
 
   const seriesByDay = useMemo(() => {
@@ -172,9 +178,9 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground">
         <div className="text-center">
-          <AlertCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
-          <p>Nenhum dado para exibir</p>
-          <p className="text-sm">Importe um arquivo Excel ou ajuste os filtros</p>
+          <AlertCircle className="w-16 h-16 mx-auto mb-6 text-muted-foreground/30" />
+          <p className="text-xl font-semibold">Nenhum dado para exibir</p>
+          <p className="text-sm mt-2">Importe um arquivo Excel ou ajuste os filtros</p>
         </div>
       </div>
     );
@@ -182,77 +188,104 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <div className="flex items-center justify-end gap-2 p-2 border-b bg-card shrink-0">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleExportExcel}
-          className="gap-2"
-        >
-          <FileSpreadsheet className="w-4 h-4" />
-          Exportar Excel
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleExportPDF}
-          disabled={exporting}
-          className="gap-2"
-        >
-          {exporting ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <FileDown className="w-4 h-4" />
-          )}
-          Exportar PDF
-        </Button>
+      {/* Header Bar */}
+      <div className="flex items-center justify-between gap-4 px-4 py-3 border-b bg-card/80 backdrop-blur-sm shrink-0">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-8 rounded-full bg-primary" />
+            <div>
+              <h1 className="font-black text-lg text-card-foreground tracking-tight">Dashboard RDA</h1>
+              <p className="text-xs text-muted-foreground">{dataset.name}</p>
+            </div>
+          </div>
+          
+          {/* Quick stats badges */}
+          <div className="hidden md:flex items-center gap-2">
+            <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full">
+              {kpis.uniquePeople} pessoas
+            </span>
+            <span className="px-3 py-1 bg-accent/10 text-accent text-xs font-bold rounded-full">
+              {kpis.uniqueDays} dias
+            </span>
+            <span className="px-3 py-1 bg-secondary/10 text-secondary text-xs font-bold rounded-full">
+              {kpis.uniqueTeams} equipes
+            </span>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportExcel}
+            className="gap-2 font-semibold"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span className="hidden sm:inline">Excel</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportPDF}
+            disabled={exporting}
+            className="gap-2 font-semibold"
+          >
+            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+            <span className="hidden sm:inline">PDF</span>
+          </Button>
+        </div>
       </div>
 
-      <div ref={dashboardRef} className="p-3 md:p-4 space-y-3 md:space-y-4 overflow-auto flex-1 bg-background">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
+      {/* Dashboard Content */}
+      <div ref={dashboardRef} className="p-4 md:p-6 space-y-6 overflow-auto flex-1 bg-gradient-to-br from-background via-background to-muted/30">
+        
+        {/* KPI Cards - 2 rows of 3 for larger cards */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <KPICard
             title="Taxa de Entrega"
             value={`${kpis.entreguesPct}%`}
             subtitle={`${kpis.entregue} de ${kpis.total} registros`}
-            icon={<TrendingUp className="w-5 h-5 text-primary" />}
+            icon={<Target className="w-5 h-5 text-primary" />}
             variant="success"
+            trend={kpis.entreguesPct >= 80 ? "up" : kpis.entreguesPct >= 50 ? "neutral" : "down"}
             onClick={() => openModal("taxa")}
           />
           <KPICard
             title="Total Entregue"
-            value={kpis.entregue}
+            value={kpis.entregue.toLocaleString("pt-BR")}
             subtitle="Marcados como ENTREGUE"
             icon={<CheckCircle className="w-5 h-5 text-primary" />}
             variant="success"
             onClick={() => openModal("entregue")}
           />
           <KPICard
-            title="Pendencias"
-            value={kpis.vazio}
-            subtitle="Sem informacao lancada"
-            icon={<AlertCircle className="w-5 h-5 text-secondary" />}
-            variant="warning"
+            title="Pendências"
+            value={(kpis.vazio + kpis.falta).toLocaleString("pt-BR")}
+            subtitle={`${kpis.vazio} vazios + ${kpis.falta} faltas`}
+            icon={<AlertCircle className="w-5 h-5 text-destructive" />}
+            variant="danger"
             onClick={() => openModal("pendencias")}
           />
           <KPICard
             title="Folgas"
-            value={kpis.folga}
-            subtitle="Dias de folga"
+            value={kpis.folga.toLocaleString("pt-BR")}
+            subtitle="Dias de descanso"
             icon={<Coffee className="w-5 h-5 text-accent" />}
             variant="info"
             onClick={() => openModal("folgas")}
           />
           <KPICard
             title="Banco de Horas"
-            value={kpis.banco}
-            subtitle="Compensacoes"
-            icon={<Clock className="w-5 h-5 text-purple-500" />}
+            value={kpis.banco.toLocaleString("pt-BR")}
+            subtitle="Compensações registradas"
+            icon={<Clock className="w-5 h-5 text-violet-500" />}
+            variant="purple"
             onClick={() => openModal("banco")}
           />
           <KPICard
-            title="Pessoas"
-            value={kpis.uniquePeople}
-            subtitle="Colaboradores unicos"
+            title="Colaboradores"
+            value={kpis.uniquePeople.toLocaleString("pt-BR")}
+            subtitle={`Em ${kpis.uniqueTeams} equipes`}
             icon={<Users className="w-5 h-5 text-muted-foreground" />}
             onClick={() => openModal("pessoas")}
           />
@@ -266,40 +299,72 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           kpis={kpis}
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-          <ChartCard title="Entregas por Dia" className="md:col-span-2">
+        {/* Charts Row 1 - Full width trend + Pie */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <ChartCard 
+            title="Tendência de Entregas" 
+            subtitle="Evolução diária no período"
+            className="lg:col-span-2"
+          >
             <DeliveryLineChart data={seriesByDay} />
           </ChartCard>
           
-          <ChartCard title="Distribuicao por Status">
+          <ChartCard 
+            title="Distribuição por Status" 
+            subtitle="Composição geral"
+          >
             <StatusPieChart data={pieByStatus} />
           </ChartCard>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-          <ChartCard title="Ranking por Pessoa">
+        {/* Charts Row 2 - Three columns */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <ChartCard 
+            title="Top 10 por Pessoa" 
+            subtitle="Ranking de entregas"
+            action={
+              <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-1 rounded-full">
+                <Award className="w-3 h-3 inline mr-1" />
+                TOP 10
+              </span>
+            }
+          >
             <PersonBarChart data={barByPerson} />
           </ChartCard>
           
-          <ChartCard title="Entregas por Equipe">
+          <ChartCard 
+            title="Entregas por Equipe" 
+            subtitle="Volume absoluto"
+          >
             <TeamBarChart data={barByTeam} />
           </ChartCard>
 
-          <ChartCard title="Comparacao de Equipes (Taxa %)">
+          <ChartCard 
+            title="Taxa por Equipe" 
+            subtitle="Comparativo de performance"
+          >
             <TeamComparisonChart data={teamComparison} />
           </ChartCard>
         </div>
 
-        <ChartCard title="Metricas Rapidas">
-          <div className="flex flex-wrap justify-around gap-4 py-4">
-            <ProgressRing value={kpis.entreguesPct} label="Taxa Entrega" />
+        {/* Quick Metrics - Progress Rings */}
+        <ChartCard 
+          title="Métricas Rápidas" 
+          subtitle="Visão consolidada das taxas"
+        >
+          <div className="flex flex-wrap justify-around items-center gap-6 py-4">
+            <ProgressRing value={kpis.entreguesPct} label="Taxa Entrega" size="lg" />
             <ProgressRing 
               value={kpis.total ? Math.round((kpis.folga / kpis.total) * 100) : 0} 
               label="Taxa Folga" 
             />
             <ProgressRing 
-              value={kpis.total ? Math.round((kpis.vazio / kpis.total) * 100) : 0} 
-              label="Pendencias" 
+              value={kpis.total ? Math.round(((kpis.vazio + kpis.falta) / kpis.total) * 100) : 0} 
+              label="Pendências" 
+            />
+            <ProgressRing 
+              value={kpis.total ? Math.round((kpis.banco / kpis.total) * 100) : 0} 
+              label="Banco Horas" 
             />
           </div>
         </ChartCard>
