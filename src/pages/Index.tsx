@@ -17,6 +17,7 @@ export default function Index() {
     importFile,
     selectDataset,
     removeDataset,
+    updateDataset,
   } = useDatasets();
 
   // Safe defaults
@@ -180,7 +181,7 @@ export default function Index() {
                 />
               </div>
             ) : (
-              <SpreadsheetView dataset={activeDataset} />
+              <SpreadsheetView dataset={activeDataset} onDatasetUpdate={updateDataset} />
             )}
           </>
         )}
