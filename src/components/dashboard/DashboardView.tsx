@@ -1,12 +1,13 @@
 import React, { useMemo, useState, useRef } from "react";
 import { 
   FileDown, Loader2, BarChart3, PieChart, TrendingUp, 
-  Hash, Calendar, Tag, Users, Database, Layers
+  Hash, Calendar, Tag, Users, Database, Layers, FileCode
 } from "lucide-react";
 import type { Dataset, ColumnMetadata } from "@/lib/database";
 import { KPICard } from "./KPICard";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
+import { exportHTML } from "@/lib/htmlExport";
 import {
   ChartCard,
   GenericLineChart,
@@ -250,9 +251,9 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     try {
       // Exporta como JSON
       const exportData = {
-        dataset: dataset.name,
+        dataset: dataset?.name ?? 'dataset',
         exportedAt: new Date().toISOString(),
-        summary: dataset.summary,
+        summary: dataset?.summary,
         data: filtered,
       };
       
@@ -260,7 +261,7 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${dataset.name}-export.json`;
+      a.download = `${dataset?.name ?? 'dataset'}-export.json`;
       a.click();
       URL.revokeObjectURL(url);
       
@@ -270,6 +271,24 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
       toast({ title: "Erro ao exportar", variant: "destructive" });
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleExportHTML = () => {
+    if (!dataset) return;
+    toast({ title: "Exportando HTML...", description: "Gerando dashboard interativo" });
+    try {
+      exportHTML(dataset, {
+        team: teamFilter,
+        person: personFilter,
+        status: statusFilter,
+        dateFrom: dateRange.from,
+        dateTo: dateRange.to,
+      });
+      toast({ title: "HTML exportado com sucesso!" });
+    } catch (error) {
+      console.error("Error exporting HTML:", error);
+      toast({ title: "Erro ao exportar HTML", variant: "destructive" });
     }
   };
 
@@ -318,12 +337,21 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           <Button
             variant="outline"
             size="sm"
+            onClick={handleExportHTML}
+            className="gap-2 font-semibold"
+          >
+            <FileCode className="w-4 h-4" />
+            <span className="hidden sm:inline">HTML</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleExport}
             disabled={exporting}
             className="gap-2 font-semibold"
           >
             {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-            <span className="hidden sm:inline">Exportar</span>
+            <span className="hidden sm:inline">JSON</span>
           </Button>
         </div>
       </div>
