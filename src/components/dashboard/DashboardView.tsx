@@ -370,6 +370,10 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
               icon={kpi.icon}
               variant={kpi.variant}
               size="sm"
+              onClick={() => toast({ 
+                title: kpi.title, 
+                description: `${kpi.value} - ${kpi.subtitle}` 
+              })}
             />
           ))}
         </div>
