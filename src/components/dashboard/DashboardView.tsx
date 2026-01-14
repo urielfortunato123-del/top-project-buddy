@@ -28,9 +28,18 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
   const [exporting, setExporting] = useState(false);
   const dashboardRef = useRef<HTMLDivElement>(null);
 
+  // Safe accessors
+  const safeRows = dataset?.rows ?? [];
+  const safeColumns = dataset?.columns ?? [];
+  const safeCategoryColumns = dataset?.detectedCategoryColumns ?? [];
+  const safeNumericColumns = dataset?.detectedNumericColumns ?? [];
+  const safeTextColumns = dataset?.detectedTextColumns ?? [];
+  const safeSummary = dataset?.summary ?? { totalRecords: 0, categoryCounts: {}, numericStats: {}, dateRange: undefined };
+
   // Filtra dados baseado nos filtros ativos
   const filtered = useMemo(() => {
-    let data = [...dataset.rows];
+    if (!dataset) return [];
+    let data = [...safeRows];
     
     const dateCol = dataset.detectedDateColumn;
     
@@ -44,21 +53,23 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     }
     
     // Aplica filtros de categoria genéricos
-    if (teamFilter !== "ALL" && dataset.detectedCategoryColumns[0]) {
-      data = data.filter((r) => r[dataset.detectedCategoryColumns[0]] === teamFilter);
+    if (teamFilter !== "ALL" && safeCategoryColumns[0]) {
+      data = data.filter((r) => r[safeCategoryColumns[0]] === teamFilter);
     }
-    if (personFilter !== "ALL" && dataset.detectedCategoryColumns[1]) {
-      data = data.filter((r) => r[dataset.detectedCategoryColumns[1]] === personFilter);
+    if (personFilter !== "ALL" && safeCategoryColumns[1]) {
+      data = data.filter((r) => r[safeCategoryColumns[1]] === personFilter);
     }
-    if (statusFilter !== "ALL" && dataset.detectedCategoryColumns[2]) {
-      data = data.filter((r) => r[dataset.detectedCategoryColumns[2]] === statusFilter);
+    if (statusFilter !== "ALL" && safeCategoryColumns[2]) {
+      data = data.filter((r) => r[safeCategoryColumns[2]] === statusFilter);
     }
     
     return data;
-  }, [dataset, personFilter, statusFilter, teamFilter, dateRange]);
+  }, [dataset, safeRows, safeCategoryColumns, personFilter, statusFilter, teamFilter, dateRange]);
 
   // Gera KPIs dinâmicos
   const kpis = useMemo(() => {
+    if (!dataset) return [];
+    
     const result: Array<{
       title: string;
       value: string;
@@ -70,15 +81,15 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     // KPI: Total de registros
     result.push({
       title: "Total Registros",
-      value: filtered.length.toLocaleString("pt-BR"),
-      subtitle: `de ${dataset.totalRows} no arquivo`,
+      value: (filtered?.length ?? 0).toLocaleString("pt-BR"),
+      subtitle: `de ${dataset.totalRows ?? 0} no arquivo`,
       icon: <Database className="w-4 h-4 md:w-5 md:h-5 text-primary" />,
       variant: "default",
     });
     
     // KPIs para cada coluna numérica (soma e média)
-    for (const colName of dataset.detectedNumericColumns.slice(0, 2)) {
-      const stats = dataset.summary.numericStats[colName];
+    for (const colName of safeNumericColumns.slice(0, 2)) {
+      const stats = safeSummary.numericStats?.[colName];
       if (stats) {
         result.push({
           title: `Soma ${colName}`,
@@ -91,11 +102,12 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     }
     
     // KPIs para colunas de categoria (contagem de valores únicos)
-    for (const colName of dataset.detectedCategoryColumns.slice(0, 3)) {
-      const counts = dataset.summary.categoryCounts[colName];
+    for (const colName of safeCategoryColumns.slice(0, 3)) {
+      const counts = safeSummary.categoryCounts?.[colName];
       if (counts) {
         const uniqueCount = Object.keys(counts).length;
-        const topValue = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+        const entries = Object.entries(counts) as [string, number][];
+        const topValue = entries.sort((a, b) => b[1] - a[1])[0];
         
         result.push({
           title: colName,
@@ -108,26 +120,27 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     }
     
     // KPI: Data range se existir
-    if (dataset.summary.dateRange) {
+    if (safeSummary.dateRange) {
       result.push({
         title: "Período",
-        value: `${dataset.summary.dateRange.from.slice(5)} a ${dataset.summary.dateRange.to.slice(5)}`,
-        subtitle: `Coluna: ${dataset.detectedDateColumn}`,
+        value: `${safeSummary.dateRange.from?.slice(5) ?? ''} a ${safeSummary.dateRange.to?.slice(5) ?? ''}`,
+        subtitle: `Coluna: ${dataset.detectedDateColumn ?? ''}`,
         icon: <Calendar className="w-4 h-4 md:w-5 md:h-5 text-violet-500" />,
         variant: "purple",
       });
     }
     
     return result.slice(0, 6); // Máximo 6 KPIs
-  }, [dataset, filtered]);
+  }, [dataset, filtered, safeNumericColumns, safeCategoryColumns, safeSummary]);
 
   // Gera dados para gráfico de linha (se tiver coluna de data)
   const lineChartData = useMemo(() => {
+    if (!dataset) return null;
     const dateCol = dataset.detectedDateColumn;
     if (!dateCol) return null;
     
-    const numCol = dataset.detectedNumericColumns[0];
-    const catCol = dataset.detectedCategoryColumns[0];
+    const numCol = safeNumericColumns[0];
+    const catCol = safeCategoryColumns[0];
     
     const map = new Map<string, { date: string; count: number; sum: number }>();
     
@@ -150,11 +163,11 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
         label1: "Registros",
         label2: numCol || undefined,
       }));
-  }, [dataset, filtered]);
+  }, [dataset, filtered, safeNumericColumns, safeCategoryColumns]);
 
   // Gera dados para gráfico de pizza (primeira coluna de categoria)
   const pieChartData = useMemo(() => {
-    const catCol = dataset.detectedCategoryColumns[0];
+    const catCol = safeCategoryColumns[0];
     if (!catCol) return null;
     
     const counts = new Map<string, number>();
@@ -167,14 +180,14 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 10);
-  }, [dataset, filtered]);
+  }, [filtered, safeCategoryColumns]);
 
   // Gera dados para gráfico de barras (segunda coluna de categoria)
   const barChartData = useMemo(() => {
-    const catCol = dataset.detectedCategoryColumns[1] || dataset.detectedCategoryColumns[0];
+    const catCol = safeCategoryColumns[1] || safeCategoryColumns[0];
     if (!catCol) return null;
     
-    const numCol = dataset.detectedNumericColumns[0];
+    const numCol = safeNumericColumns[0];
     
     const map = new Map<string, { category: string; count: number; sum: number }>();
     
@@ -189,13 +202,13 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     return Array.from(map.values())
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
-  }, [dataset, filtered]);
+  }, [filtered, safeCategoryColumns, safeNumericColumns]);
 
   // Gera dados para gráfico horizontal (terceira coluna de categoria ou texto)
   const horizontalBarData = useMemo(() => {
-    const catCol = dataset.detectedCategoryColumns[2] || 
-                   dataset.detectedTextColumns[0] || 
-                   dataset.detectedCategoryColumns[0];
+    const catCol = safeCategoryColumns[2] || 
+                   safeTextColumns[0] || 
+                   safeCategoryColumns[0];
     if (!catCol) return null;
     
     const counts = new Map<string, number>();
@@ -208,26 +221,27 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 10);
-  }, [dataset, filtered]);
+  }, [filtered, safeCategoryColumns, safeTextColumns]);
 
   // Progress rings para categorias principais
   const progressRings = useMemo(() => {
-    const catCol = dataset.detectedCategoryColumns[0];
+    const catCol = safeCategoryColumns[0];
     if (!catCol) return [];
     
-    const counts = dataset.summary.categoryCounts[catCol];
+    const counts = safeSummary.categoryCounts?.[catCol];
     if (!counts) return [];
     
-    const total = Object.values(counts).reduce((a, b) => a + b, 0);
+    const entries = Object.entries(counts) as [string, number][];
+    const total = entries.reduce((a, b) => a + b[1], 0);
     
-    return Object.entries(counts)
+    return entries
       .sort((a, b) => b[1] - a[1])
       .slice(0, 4)
       .map(([label, count]) => ({
         label,
         value: total > 0 ? Math.round((count / total) * 100) : 0,
       }));
-  }, [dataset]);
+  }, [safeCategoryColumns, safeSummary]);
 
   const handleExport = async () => {
     setExporting(true);
@@ -280,21 +294,21 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
             <div className="w-2 h-8 rounded-full bg-primary" />
             <div>
               <h1 className="font-black text-lg text-card-foreground tracking-tight">Dashboard</h1>
-              <p className="text-xs text-muted-foreground">{dataset.name}</p>
+              <p className="text-xs text-muted-foreground">{dataset?.name ?? 'Dataset'}</p>
             </div>
           </div>
           
           {/* Quick stats badges */}
           <div className="hidden md:flex items-center gap-2">
             <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full">
-              {dataset.columns.length} colunas
+              {safeColumns.length} colunas
             </span>
             <span className="px-3 py-1 bg-accent/10 text-accent text-xs font-bold rounded-full">
               {filtered.length} registros
             </span>
-            {dataset.detectedCategoryColumns.length > 0 && (
+            {(safeCategoryColumns.length ?? 0) > 0 && (
               <span className="px-3 py-1 bg-secondary/10 text-secondary text-xs font-bold rounded-full">
-                {dataset.detectedCategoryColumns.length} categorias
+                {safeCategoryColumns.length} categorias
               </span>
             )}
           </div>
@@ -334,9 +348,9 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
 
         {/* Charts Row 1 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {lineChartData && lineChartData.length > 1 && (
+          {lineChartData && (lineChartData.length ?? 0) > 1 && (
             <ChartCard 
-              title={`Evolução por ${dataset.detectedDateColumn}`}
+              title={`Evolução por ${dataset?.detectedDateColumn ?? 'Data'}`}
               subtitle="Tendência ao longo do tempo"
               className="lg:col-span-2"
             >
@@ -344,9 +358,9 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
             </ChartCard>
           )}
           
-          {pieChartData && pieChartData.length > 0 && (
+          {pieChartData && (pieChartData.length ?? 0) > 0 && (
             <ChartCard 
-              title={`Distribuição: ${dataset.detectedCategoryColumns[0]}`}
+              title={`Distribuição: ${safeCategoryColumns[0] ?? 'Categoria'}`}
               subtitle="Composição geral"
             >
               <GenericPieChart data={pieChartData} />
@@ -356,28 +370,28 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
 
         {/* Charts Row 2 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {barChartData && barChartData.length > 0 && (
+          {barChartData && (barChartData.length ?? 0) > 0 && (
             <ChartCard 
-              title={`Por ${dataset.detectedCategoryColumns[1] || dataset.detectedCategoryColumns[0] || "Categoria"}`}
+              title={`Por ${safeCategoryColumns[1] || safeCategoryColumns[0] || "Categoria"}`}
               subtitle="Top 10 por quantidade"
             >
               <GenericBarChart data={barChartData} />
             </ChartCard>
           )}
           
-          {horizontalBarData && horizontalBarData.length > 0 && (
+          {horizontalBarData && (horizontalBarData.length ?? 0) > 0 && (
             <ChartCard 
-              title={`Ranking: ${dataset.detectedCategoryColumns[2] || dataset.detectedTextColumns[0] || "Valores"}`}
+              title={`Ranking: ${safeCategoryColumns[2] || safeTextColumns[0] || "Valores"}`}
               subtitle="Distribuição horizontal"
             >
               <GenericHorizontalBarChart data={horizontalBarData} />
             </ChartCard>
           )}
 
-          {progressRings.length > 0 && (
+          {(progressRings?.length ?? 0) > 0 && (
             <ChartCard 
               title="Métricas Rápidas"
-              subtitle={`Taxas por ${dataset.detectedCategoryColumns[0]}`}
+              subtitle={`Taxas por ${safeCategoryColumns[0] ?? 'Categoria'}`}
             >
               <div className="flex flex-wrap justify-around items-center gap-4 py-4">
                 {progressRings.map((ring, idx) => (
@@ -394,21 +408,21 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           subtitle="Colunas identificadas automaticamente"
         >
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-2">
-            {dataset.detectedDateColumn && (
+            {dataset?.detectedDateColumn && (
               <div className="flex items-center gap-2 text-sm">
                 <Calendar className="w-4 h-4 text-violet-500" />
                 <span className="text-muted-foreground">Data:</span>
                 <span className="font-semibold truncate">{dataset.detectedDateColumn}</span>
               </div>
             )}
-            {dataset.detectedNumericColumns.slice(0, 2).map((col, idx) => (
+            {safeNumericColumns.slice(0, 2).map((col, idx) => (
               <div key={col} className="flex items-center gap-2 text-sm">
                 <Hash className="w-4 h-4 text-accent" />
                 <span className="text-muted-foreground">Número:</span>
                 <span className="font-semibold truncate">{col}</span>
               </div>
             ))}
-            {dataset.detectedCategoryColumns.slice(0, 3).map((col, idx) => (
+            {safeCategoryColumns.slice(0, 3).map((col, idx) => (
               <div key={col} className="flex items-center gap-2 text-sm">
                 <Tag className="w-4 h-4 text-secondary" />
                 <span className="text-muted-foreground">Categoria:</span>
