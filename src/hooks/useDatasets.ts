@@ -88,6 +88,13 @@ export function useDatasets() {
     }
   }, [currentDataset, datasets]);
 
+  const updateDataset = useCallback((updatedDataset: Dataset) => {
+    setCurrentDataset(updatedDataset);
+    setDatasets((prev) => 
+      prev.map((d) => (d.id === updatedDataset.id ? updatedDataset : d))
+    );
+  }, []);
+
   return {
     datasets,
     currentDataset,
@@ -96,6 +103,7 @@ export function useDatasets() {
     importFile,
     selectDataset,
     removeDataset,
+    updateDataset,
     refresh: loadDatasets,
   };
 }
