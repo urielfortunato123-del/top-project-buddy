@@ -7,11 +7,7 @@ import { SpreadsheetView } from "@/components/dashboard/SpreadsheetView";
 import { ViewTabs } from "@/components/dashboard/ViewTabs";
 import { useDatasets } from "@/hooks/useDatasets";
 import { Button } from "@/components/ui/button";
-
-export interface DateRange {
-  from: Date | undefined;
-  to: Date | undefined;
-}
+import type { DateRange } from "@/lib/dateRange";
 
 export default function Index() {
   const {
