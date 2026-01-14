@@ -50,6 +50,14 @@ function getShortLabel(value: any): string {
   return first.slice(0, 4).toUpperCase();
 }
 
+// Detecta se um valor parece ser um status em vez de nome de pessoa
+function looksLikeStatus(value: string): boolean {
+  const v = value.trim().toUpperCase();
+  if (!v || v === "(VAZIO)") return false;
+  // Padrões comuns de status
+  return /^(ENT|FOL|BAN|FAL|ATE|FER|ENTREGUE?|FOLGA?|FALTA?|ATESTADO?|FERIAS?|FÉRIAS?|BANCO|-)$/i.test(v);
+}
+
 export function MatrixTable({ rows, domainRows, rowColumn, colColumn, valueColumn }: MatrixTableProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 30 });
@@ -68,7 +76,10 @@ export function MatrixTable({ rows, domainRows, rowColumn, colColumn, valueColum
       const rowKey = String(r[rowColumn] || "(vazio)");
       const colKey = String(r[colColumn] || "(vazio)");
       colsSet.add(colKey);
-      rowsSet.add(rowKey);
+      // Filtra valores que parecem status para não aparecerem como linhas
+      if (!looksLikeStatus(rowKey)) {
+        rowsSet.add(rowKey);
+      }
     }
 
     // 2) Valores vêm das linhas filtradas (para respeitar filtros)
@@ -77,9 +88,12 @@ export function MatrixTable({ rows, domainRows, rowColumn, colColumn, valueColum
       const colKey = String(r[colColumn] || "(vazio)");
       const value = r[valueColumn];
 
-      const key = `${rowKey}|${colKey}`;
-      map.set(key, value);
-      uniqueValues.add(String(value || "(vazio)"));
+      // Só adiciona se a linha não for um status
+      if (!looksLikeStatus(rowKey)) {
+        const key = `${rowKey}|${colKey}`;
+        map.set(key, value);
+        uniqueValues.add(String(value || "(vazio)"));
+      }
     }
 
     // Cria mapa de cores
