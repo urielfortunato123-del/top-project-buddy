@@ -8,6 +8,7 @@ import {
   PersonBarChart,
   StatusPieChart,
   TeamBarChart,
+  TeamComparisonChart,
   ProgressRing,
 } from "./Charts";
 
@@ -86,6 +87,13 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter 
     return Array.from(map.values()).sort((a, b) => b.entregue - a.entregue);
   }, [filtered]);
 
+  const teamComparison = useMemo(() => {
+    return barByTeam.map(item => ({
+      ...item,
+      taxa: item.total > 0 ? Math.round((item.entregue / item.total) * 100) : 0
+    }));
+  }, [barByTeam]);
+
   if (filtered.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -156,13 +164,17 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter 
       </div>
 
       {/* Charts Row 2 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <ChartCard title="Ranking por Pessoa">
           <PersonBarChart data={barByPerson} />
         </ChartCard>
         
         <ChartCard title="Entregas por Equipe">
           <TeamBarChart data={barByTeam} />
+        </ChartCard>
+
+        <ChartCard title="Comparação de Equipes (Taxa %)">
+          <TeamComparisonChart data={teamComparison} />
         </ChartCard>
       </div>
 
