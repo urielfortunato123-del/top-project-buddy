@@ -409,6 +409,21 @@ export function MatrixTable({
             </div>
           </div>
         </div>
+
+        {/* Legenda de cores */}
+        <div className="px-4 py-3 border-t bg-gray-50 shrink-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] text-gray-500 font-medium mr-1">Legenda:</span>
+            {Array.from(colorMap.entries()).map(([value, color]) => (
+              <div 
+                key={value} 
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] border ${color.bg} ${color.text} ${color.border}`}
+              >
+                <span className="font-semibold">{value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </TooltipProvider>
   );
