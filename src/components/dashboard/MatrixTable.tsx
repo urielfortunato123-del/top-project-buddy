@@ -8,9 +8,12 @@ import {
 } from "@/components/ui/tooltip";
 
 interface MatrixTableProps {
+  /** Linhas visíveis (já filtradas) usadas para preencher os valores */
   rows: GenericRow[];
-  rowColumn: string;  // Coluna para usar como linhas
-  colColumn: string;  // Coluna para usar como colunas
+  /** Linhas de domínio (sem filtros) usadas para garantir que todos os funcionários/colunas apareçam */
+  domainRows?: GenericRow[];
+  rowColumn: string; // Coluna para usar como linhas
+  colColumn: string; // Coluna para usar como colunas
   valueColumn: string; // Coluna para mostrar os valores
 }
 
@@ -47,9 +50,11 @@ function getShortLabel(value: any): string {
   return first.slice(0, 4).toUpperCase();
 }
 
-export function MatrixTable({ rows, rowColumn, colColumn, valueColumn }: MatrixTableProps) {
+export function MatrixTable({ rows, domainRows, rowColumn, colColumn, valueColumn }: MatrixTableProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 30 });
+
+  const domain = domainRows ?? rows;
   
   // Agrupa dados
   const { cols, rowKeys, valueMap, colorMap } = useMemo(() => {
@@ -57,33 +62,39 @@ export function MatrixTable({ rows, rowColumn, colColumn, valueColumn }: MatrixT
     const rowsSet = new Set<string>();
     const map = new Map<string, any>();
     const uniqueValues = new Set<string>();
-    
+
+    // 1) Eixos (linhas/colunas) vêm do domínio (sem filtro)
+    for (const r of domain) {
+      const rowKey = String(r[rowColumn] || "(vazio)");
+      const colKey = String(r[colColumn] || "(vazio)");
+      colsSet.add(colKey);
+      rowsSet.add(rowKey);
+    }
+
+    // 2) Valores vêm das linhas filtradas (para respeitar filtros)
     for (const r of rows) {
       const rowKey = String(r[rowColumn] || "(vazio)");
       const colKey = String(r[colColumn] || "(vazio)");
       const value = r[valueColumn];
-      
-      colsSet.add(colKey);
-      rowsSet.add(rowKey);
-      
+
       const key = `${rowKey}|${colKey}`;
       map.set(key, value);
       uniqueValues.add(String(value || "(vazio)"));
     }
-    
+
     // Cria mapa de cores
     const colorMap = new Map<string, typeof VALUE_COLORS[0]>();
     Array.from(uniqueValues).forEach((v, idx) => {
       colorMap.set(v, VALUE_COLORS[idx % VALUE_COLORS.length]);
     });
-    
+
     return {
       cols: Array.from(colsSet).sort(),
       rowKeys: Array.from(rowsSet).sort(),
       valueMap: map,
       colorMap,
     };
-  }, [rows, rowColumn, colColumn, valueColumn]);
+  }, [domain, rows, rowColumn, colColumn, valueColumn]);
 
   // Virtualização
   const ROW_HEIGHT = 40;

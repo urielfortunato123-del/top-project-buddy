@@ -190,7 +190,8 @@ export default function Index() {
       {activeDataset && activeTab === "dashboard" && (safeCategoryColumns?.length ?? 0) >= 2 && (
         <aside className="w-[520px] shrink-0 border-l bg-white overflow-hidden flex flex-col shadow-sm">
           <MatrixTable 
-            rows={filteredRows} 
+            rows={filteredRows}
+            domainRows={activeDataset.rows}
             rowColumn={safeCategoryColumns[1] || safeCategoryColumns[0]}
             colColumn={activeDataset.detectedDateColumn || safeCategoryColumns[0]}
             valueColumn={safeCategoryColumns[0]}
