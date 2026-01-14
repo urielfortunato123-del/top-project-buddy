@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import type { Dataset } from "@/lib/database";
+import type { DateRange } from "@/pages/Index";
 import { cn } from "@/lib/utils";
 
 interface SpreadsheetViewProps {
@@ -7,6 +8,7 @@ interface SpreadsheetViewProps {
   personFilter: string;
   statusFilter: string;
   teamFilter: string;
+  dateRange: DateRange;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -19,9 +21,19 @@ const STATUS_COLORS: Record<string, string> = {
   VAZIO: "bg-muted text-muted-foreground",
 };
 
-export function SpreadsheetView({ dataset, personFilter, statusFilter, teamFilter }: SpreadsheetViewProps) {
+export function SpreadsheetView({ dataset, personFilter, statusFilter, teamFilter, dateRange }: SpreadsheetViewProps) {
   const { filteredRows, dates, people } = useMemo(() => {
     let filtered = dataset.rows;
+    
+    // Date range filter
+    if (dateRange.from) {
+      const fromStr = dateRange.from.toISOString().slice(0, 10);
+      filtered = filtered.filter((r) => r.date >= fromStr);
+    }
+    if (dateRange.to) {
+      const toStr = dateRange.to.toISOString().slice(0, 10);
+      filtered = filtered.filter((r) => r.date <= toStr);
+    }
     
     if (teamFilter !== "ALL") {
       filtered = filtered.filter((r) => r.team === teamFilter);
@@ -40,7 +52,7 @@ export function SpreadsheetView({ dataset, personFilter, statusFilter, teamFilte
     const people = Array.from(peopleSet).sort();
 
     return { filteredRows: filtered, dates, people };
-  }, [dataset.rows, personFilter, statusFilter, teamFilter]);
+  }, [dataset.rows, personFilter, statusFilter, teamFilter, dateRange]);
 
   const getStatus = (person: string, date: string) => {
     const row = filteredRows.find((r) => r.person === person && r.date === date);

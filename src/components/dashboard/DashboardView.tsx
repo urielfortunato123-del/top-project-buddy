@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { CheckCircle, AlertCircle, Coffee, Clock, Users, TrendingUp } from "lucide-react";
 import type { Dataset, DatasetRow } from "@/lib/database";
+import type { DateRange } from "@/pages/Index";
 import { KPICard } from "./KPICard";
 import {
   ChartCard,
@@ -17,6 +18,7 @@ interface DashboardViewProps {
   personFilter: string;
   statusFilter: string;
   teamFilter: string;
+  dateRange: DateRange;
 }
 
 function prettyStatus(s: string) {
@@ -24,14 +26,25 @@ function prettyStatus(s: string) {
   return s;
 }
 
-export function DashboardView({ dataset, personFilter, statusFilter, teamFilter }: DashboardViewProps) {
+export function DashboardView({ dataset, personFilter, statusFilter, teamFilter, dateRange }: DashboardViewProps) {
   const filtered = useMemo(() => {
     let data = dataset.rows;
+    
+    // Date range filter
+    if (dateRange.from) {
+      const fromStr = dateRange.from.toISOString().slice(0, 10);
+      data = data.filter((r) => r.date >= fromStr);
+    }
+    if (dateRange.to) {
+      const toStr = dateRange.to.toISOString().slice(0, 10);
+      data = data.filter((r) => r.date <= toStr);
+    }
+    
     if (teamFilter !== "ALL") data = data.filter((r) => r.team === teamFilter);
     if (personFilter !== "ALL") data = data.filter((r) => r.person === personFilter);
     if (statusFilter !== "ALL") data = data.filter((r) => r.status === statusFilter);
     return data;
-  }, [dataset.rows, personFilter, statusFilter, teamFilter]);
+  }, [dataset.rows, personFilter, statusFilter, teamFilter, dateRange]);
 
   const kpis = useMemo(() => {
     const total = filtered.length;

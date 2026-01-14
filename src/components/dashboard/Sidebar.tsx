@@ -1,7 +1,13 @@
 import React, { useRef } from "react";
-import { LayoutDashboard, FileSpreadsheet, Upload, Database, Settings, ChevronDown, Trash2 } from "lucide-react";
+import { LayoutDashboard, FileSpreadsheet, Upload, Database, Settings, Trash2, CalendarIcon, X } from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import type { Dataset } from "@/lib/database";
+import type { DateRange } from "@/pages/Index";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface SidebarProps {
   datasets: Dataset[];
@@ -15,6 +21,9 @@ interface SidebarProps {
   setStatusFilter: (v: string) => void;
   teamFilter: string;
   setTeamFilter: (v: string) => void;
+  dateRange: DateRange;
+  setDateRange: (v: DateRange) => void;
+  availableDateRange: { min: Date | undefined; max: Date | undefined };
   peopleList: string[];
   statusList: string[];
   teamList: string[];
@@ -32,6 +41,9 @@ export function Sidebar({
   setStatusFilter,
   teamFilter,
   setTeamFilter,
+  dateRange,
+  setDateRange,
+  availableDateRange,
   peopleList,
   statusList,
   teamList,
@@ -44,6 +56,19 @@ export function Sidebar({
       onImport(file);
       e.target.value = "";
     }
+  };
+
+  const clearDateRange = () => {
+    setDateRange({ from: undefined, to: undefined });
+  };
+
+  const formatDateRange = () => {
+    if (!dateRange.from && !dateRange.to) return "Selecionar período";
+    if (dateRange.from && !dateRange.to) return format(dateRange.from, "dd/MM/yy", { locale: ptBR });
+    if (dateRange.from && dateRange.to) {
+      return `${format(dateRange.from, "dd/MM", { locale: ptBR })} - ${format(dateRange.to, "dd/MM/yy", { locale: ptBR })}`;
+    }
+    return "Selecionar período";
   };
 
   return (
@@ -122,10 +147,56 @@ export function Sidebar({
 
       {/* Filters */}
       {currentDataset && (
-        <div className="p-4 border-b border-sidebar-border space-y-3">
+        <div className="p-4 border-b border-sidebar-border space-y-3 overflow-auto max-h-[50vh]">
           <div className="flex items-center gap-2 text-xs text-sidebar-muted mb-2">
             <Settings className="w-3 h-3" />
             <span>FILTROS</span>
+          </div>
+
+          {/* Date Range Filter */}
+          <div>
+            <label className="text-xs text-sidebar-muted block mb-1">Período</label>
+            <div className="flex gap-1">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "flex-1 justify-start text-left font-normal h-9 text-xs bg-sidebar-accent border-sidebar-border text-sidebar-foreground hover:bg-sidebar-accent/80",
+                      !dateRange.from && "text-sidebar-muted"
+                    )}
+                  >
+                    <CalendarIcon className="mr-1 h-3 w-3" />
+                    {formatDateRange()}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="range"
+                    selected={{ from: dateRange.from, to: dateRange.to }}
+                    onSelect={(range) => setDateRange({ from: range?.from, to: range?.to })}
+                    disabled={(date) => {
+                      if (!availableDateRange.min || !availableDateRange.max) return false;
+                      return date < availableDateRange.min || date > availableDateRange.max;
+                    }}
+                    initialFocus
+                    numberOfMonths={1}
+                    locale={ptBR}
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+              {(dateRange.from || dateRange.to) && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 shrink-0 text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                  onClick={clearDateRange}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
           </div>
 
           <div>

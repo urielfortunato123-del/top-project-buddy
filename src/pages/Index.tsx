@@ -6,6 +6,11 @@ import { SpreadsheetView } from "@/components/dashboard/SpreadsheetView";
 import { useDatasets } from "@/hooks/useDatasets";
 import { cn } from "@/lib/utils";
 
+export interface DateRange {
+  from: Date | undefined;
+  to: Date | undefined;
+}
+
 export default function Index() {
   const {
     datasets,
@@ -19,12 +24,24 @@ export default function Index() {
   const [personFilter, setPersonFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [teamFilter, setTeamFilter] = useState("ALL");
+  const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
   const [splitView, setSplitView] = useState(true);
+
+  // Get available date range from dataset
+  const availableDateRange = useMemo(() => {
+    if (!currentDataset || currentDataset.rows.length === 0) return { min: undefined, max: undefined };
+    const dates = currentDataset.rows.map(r => r.date).sort();
+    return { 
+      min: new Date(dates[0]), 
+      max: new Date(dates[dates.length - 1]) 
+    };
+  }, [currentDataset]);
 
   React.useEffect(() => {
     setPersonFilter("ALL");
     setStatusFilter("ALL");
     setTeamFilter("ALL");
+    setDateRange({ from: undefined, to: undefined });
   }, [currentDataset?.id]);
 
   const peopleList = useMemo(() => {
@@ -56,6 +73,9 @@ export default function Index() {
         setStatusFilter={setStatusFilter}
         teamFilter={teamFilter}
         setTeamFilter={setTeamFilter}
+        dateRange={dateRange}
+        setDateRange={setDateRange}
+        availableDateRange={availableDateRange}
         peopleList={peopleList}
         statusList={statusList}
         teamList={teamList}
@@ -103,14 +123,14 @@ export default function Index() {
           ) : splitView ? (
             <div className="grid grid-cols-2 h-full">
               <div className="border-r overflow-hidden">
-                <DashboardView dataset={currentDataset} personFilter={personFilter} statusFilter={statusFilter} teamFilter={teamFilter} />
+                <DashboardView dataset={currentDataset} personFilter={personFilter} statusFilter={statusFilter} teamFilter={teamFilter} dateRange={dateRange} />
               </div>
               <div className="overflow-hidden bg-card">
-                <SpreadsheetView dataset={currentDataset} personFilter={personFilter} statusFilter={statusFilter} teamFilter={teamFilter} />
+                <SpreadsheetView dataset={currentDataset} personFilter={personFilter} statusFilter={statusFilter} teamFilter={teamFilter} dateRange={dateRange} />
               </div>
             </div>
           ) : (
-            <DashboardView dataset={currentDataset} personFilter={personFilter} statusFilter={statusFilter} teamFilter={teamFilter} />
+            <DashboardView dataset={currentDataset} personFilter={personFilter} statusFilter={statusFilter} teamFilter={teamFilter} dateRange={dateRange} />
           )}
         </div>
       </main>
