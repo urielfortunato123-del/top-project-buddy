@@ -82,18 +82,34 @@ export function MatrixTable({
   const [selectedColCol, setSelectedColCol] = useState(initialColColumn);
   const [selectedValueCol, setSelectedValueCol] = useState(initialValueColumn);
 
-  // Atualiza quando props mudam
+  // Atualiza quando props mudam (apenas se ainda não foi selecionado manualmente)
   useEffect(() => {
-    setSelectedRowCol(initialRowColumn);
+    if (initialRowColumn) setSelectedRowCol(initialRowColumn);
   }, [initialRowColumn]);
   
   useEffect(() => {
-    setSelectedColCol(initialColColumn);
+    if (initialColColumn) setSelectedColCol(initialColColumn);
   }, [initialColColumn]);
   
   useEffect(() => {
-    setSelectedValueCol(initialValueColumn);
+    if (initialValueColumn) setSelectedValueCol(initialValueColumn);
   }, [initialValueColumn]);
+
+  // Handlers que notificam o parent
+  const handleRowColChange = (val: string) => {
+    setSelectedRowCol(val);
+    onColumnsChange?.(val, selectedColCol, selectedValueCol);
+  };
+  
+  const handleColColChange = (val: string) => {
+    setSelectedColCol(val);
+    onColumnsChange?.(selectedRowCol, val, selectedValueCol);
+  };
+  
+  const handleValueColChange = (val: string) => {
+    setSelectedValueCol(val);
+    onColumnsChange?.(selectedRowCol, selectedColCol, val);
+  };
 
   // Usa as colunas selecionadas
   const rowColumn = selectedRowCol || initialRowColumn;
@@ -182,20 +198,6 @@ export function MatrixTable({
     return Array.from(cols).filter(Boolean);
   }, [availableColumns, rows]);
 
-  const handleRowColChange = (value: string) => {
-    setSelectedRowCol(value);
-    onColumnsChange?.(value, colColumn, valueColumn);
-  };
-
-  const handleColColChange = (value: string) => {
-    setSelectedColCol(value);
-    onColumnsChange?.(rowColumn, value, valueColumn);
-  };
-
-  const handleValueColChange = (value: string) => {
-    setSelectedValueCol(value);
-    onColumnsChange?.(rowColumn, colColumn, value);
-  };
 
   if (cols.length === 0 || rowKeys.length === 0) {
     return (

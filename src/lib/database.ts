@@ -19,6 +19,12 @@ export interface GenericRow {
   _rowIndex: number;
 }
 
+export interface MatrixConfig {
+  rowColumn: string;
+  colColumn: string;
+  valueColumn: string;
+}
+
 export interface Dataset {
   id: string;
   name: string;
@@ -39,6 +45,9 @@ export interface Dataset {
   // Estatísticas gerais
   totalRows: number;
   summary: DatasetSummary;
+  
+  // Configuração persistida da matriz
+  matrixConfig?: MatrixConfig;
 }
 
 export interface DatasetSummary {

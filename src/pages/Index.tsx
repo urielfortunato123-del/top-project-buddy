@@ -9,7 +9,8 @@ import { DatasetSelect } from "@/components/dashboard/DatasetSelect";
 import { useDatasets } from "@/hooks/useDatasets";
 import { Button } from "@/components/ui/button";
 import type { DateRange } from "@/lib/dateRange";
-import type { GenericRow } from "@/lib/database";
+import type { GenericRow, MatrixConfig } from "@/lib/database";
+import { saveDataset } from "@/lib/database";
 
 const STATUS_PATTERN = /^(ENT|FOL|BAN|FAL|ATE|FER|ENTREGUE?|FOLGA?|FALTA?|ATESTADO?|FER[IÉ]AS?|BANCO( DE HORAS)?|VAZIO|-)$/i;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}|^\d{2}\/\d{2}\/\d{4}/;
@@ -338,10 +339,16 @@ export default function Index() {
           <MatrixTable 
             rows={filteredRows}
             domainRows={activeDataset.rows}
-            rowColumn={findBestPersonColumn(matrixCandidateColumns, activeDataset.rows)}
-            colColumn={findDateColumn(matrixCandidateColumns, activeDataset.rows, activeDataset.detectedDateColumn)}
-            valueColumn={findStatusColumn(matrixCandidateColumns, activeDataset.rows) || matrixCandidateColumns[0]}
+            rowColumn={activeDataset.matrixConfig?.rowColumn || findBestPersonColumn(matrixCandidateColumns, activeDataset.rows)}
+            colColumn={activeDataset.matrixConfig?.colColumn || findDateColumn(matrixCandidateColumns, activeDataset.rows, activeDataset.detectedDateColumn)}
+            valueColumn={activeDataset.matrixConfig?.valueColumn || findStatusColumn(matrixCandidateColumns, activeDataset.rows) || matrixCandidateColumns[0]}
             availableColumns={activeDataset.columns?.map(c => typeof c === 'string' ? c : c.name) || []}
+            onColumnsChange={async (row, col, value) => {
+              const newConfig: MatrixConfig = { rowColumn: row, colColumn: col, valueColumn: value };
+              const updated = { ...activeDataset, matrixConfig: newConfig, updatedAt: new Date().toISOString() };
+              await saveDataset(updated);
+              updateDataset(updated);
+            }}
           />
         </aside>
       )}
