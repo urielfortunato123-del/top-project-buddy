@@ -9,54 +9,79 @@ import { DatasetSelect } from "@/components/dashboard/DatasetSelect";
 import { useDatasets } from "@/hooks/useDatasets";
 import { Button } from "@/components/ui/button";
 import type { DateRange } from "@/lib/dateRange";
+import type { GenericRow } from "@/lib/database";
 
-// Detecta a coluna que contém nomes de pessoas (mais valores únicos que não são status)
-function findBestPersonColumn(
-  categoryColumns: string[],
-  categoryCounts: Record<string, Record<string, number>>
-): string {
-  const statusPattern = /^(ENT|FOL|BAN|FAL|ATE|FER|ENTREGUE?|FOLGA?|FALTA?|ATESTADO?|FER[IÉ]AS?|BANCO|VAZIO|-)$/i;
-  
-  let bestCol = categoryColumns[0] || "";
-  let maxNonStatusValues = 0;
-  
-  for (const colName of categoryColumns) {
-    const counts = categoryCounts[colName];
-    if (!counts) continue;
-    
-    const values = Object.keys(counts);
-    const nonStatusValues = values.filter(v => !statusPattern.test(v.trim()));
-    
-    if (nonStatusValues.length > maxNonStatusValues) {
-      maxNonStatusValues = nonStatusValues.length;
+const STATUS_PATTERN = /^(ENT|FOL|BAN|FAL|ATE|FER|ENTREGUE?|FOLGA?|FALTA?|ATESTADO?|FER[IÉ]AS?|BANCO( DE HORAS)?|VAZIO|-)$/i;
+
+function isStatusLike(v: unknown): boolean {
+  const s = String(v ?? "").trim();
+  if (!s) return true;
+  return STATUS_PATTERN.test(s);
+}
+
+// Detecta a coluna que contém nomes de pessoas (maior diversidade de valores não-status)
+function findBestPersonColumn(categoryColumns: string[], domainRows: GenericRow[]): string {
+  const cols = categoryColumns.filter(Boolean);
+  if (cols.length === 0) return "";
+
+  let bestCol = cols[0];
+  let bestScore = -1;
+
+  // Amostra para performance
+  const sample = domainRows.slice(0, 8000);
+
+  for (const colName of cols) {
+    const unique = new Set<string>();
+    for (const r of sample) {
+      const raw = r[colName];
+      if (isStatusLike(raw)) continue;
+      const s = String(raw).trim();
+      if (s) unique.add(s);
+      if (unique.size > 300) break; // suficiente pra decidir
+    }
+
+    if (unique.size > bestScore) {
+      bestScore = unique.size;
       bestCol = colName;
     }
   }
-  
+
   return bestCol;
 }
 
-// Detecta a coluna que contém status
-function findStatusColumn(
-  categoryColumns: string[],
-  categoryCounts: Record<string, Record<string, number>>
-): string | null {
-  const statusPattern = /^(ENT|FOL|BAN|FAL|ATE|FER|ENTREGUE?|FOLGA?|FALTA?|ATESTADO?|FER[IÉ]AS?|BANCO|VAZIO|-)$/i;
-  
-  for (const colName of categoryColumns) {
-    const counts = categoryCounts[colName];
-    if (!counts) continue;
-    
-    const values = Object.keys(counts);
-    const statusValues = values.filter(v => statusPattern.test(v.trim()));
-    
-    // Se mais da metade dos valores são status, é provavelmente a coluna de status
-    if (statusValues.length > values.length * 0.3) {
-      return colName;
+// Detecta a coluna que contém status (alta proporção de valores tipo status)
+function findStatusColumn(categoryColumns: string[], domainRows: GenericRow[]): string | null {
+  const cols = categoryColumns.filter(Boolean);
+  if (cols.length === 0) return null;
+
+  const sample = domainRows.slice(0, 8000);
+
+  let bestCol: string | null = null;
+  let bestRatio = 0;
+
+  for (const colName of cols) {
+    let total = 0;
+    let statusLike = 0;
+
+    for (const r of sample) {
+      const raw = r[colName];
+      const s = String(raw ?? "").trim();
+      if (!s) continue;
+      total += 1;
+      if (isStatusLike(s)) statusLike += 1;
+    }
+
+    if (total === 0) continue;
+    const ratio = statusLike / total;
+
+    // coluna de status normalmente tem poucos valores únicos e ratio alto
+    if (ratio > bestRatio) {
+      bestRatio = ratio;
+      bestCol = colName;
     }
   }
-  
-  return null;
+
+  return bestRatio >= 0.25 ? bestCol : null;
 }
 
 export default function Index() {
@@ -75,6 +100,11 @@ export default function Index() {
   const activeDataset = currentDataset ?? safeDatasets[0] ?? null;
   const safeRows = activeDataset?.rows ?? [];
   const safeCategoryColumns = activeDataset?.detectedCategoryColumns ?? [];
+  const safeTextColumns = activeDataset?.detectedTextColumns ?? [];
+
+  const matrixCandidateColumns = useMemo(() => {
+    return Array.from(new Set([...(safeCategoryColumns || []), ...(safeTextColumns || [])])).filter(Boolean);
+  }, [safeCategoryColumns, safeTextColumns]);
 
   const [personFilter, setPersonFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -238,14 +268,14 @@ export default function Index() {
       </main>
 
       {/* RIGHT: Matrix Panel - Only show in Dashboard view if we have category data */}
-      {activeDataset && activeTab === "dashboard" && (safeCategoryColumns?.length ?? 0) >= 1 && (
+      {activeDataset && activeTab === "dashboard" && (matrixCandidateColumns?.length ?? 0) >= 1 && (
         <aside className="w-[520px] shrink-0 border-l bg-white overflow-hidden flex flex-col shadow-sm">
           <MatrixTable 
             rows={filteredRows}
             domainRows={activeDataset.rows}
-            rowColumn={findBestPersonColumn(safeCategoryColumns, activeDataset.summary?.categoryCounts || {})}
-            colColumn={activeDataset.detectedDateColumn || safeCategoryColumns[0]}
-            valueColumn={findStatusColumn(safeCategoryColumns, activeDataset.summary?.categoryCounts || {}) || safeCategoryColumns[0]}
+            rowColumn={findBestPersonColumn(matrixCandidateColumns, activeDataset.rows)}
+            colColumn={activeDataset.detectedDateColumn || matrixCandidateColumns[0]}
+            valueColumn={findStatusColumn(matrixCandidateColumns, activeDataset.rows) || matrixCandidateColumns[0]}
           />
         </aside>
       )}
