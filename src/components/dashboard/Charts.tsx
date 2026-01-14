@@ -9,7 +9,6 @@ import {
   CartesianGrid,
   BarChart,
   Bar,
-  Legend,
   PieChart,
   Pie,
   Cell,
@@ -64,22 +63,27 @@ export function ChartCard({ title, subtitle, children, className, action }: Char
   );
 }
 
-interface LineChartData {
+// Gráfico de linha genérico
+interface GenericLineData {
   date: string;
-  entregue: number;
-  total: number;
+  value1: number;
+  value2?: number;
+  label1?: string;
+  label2?: string;
 }
 
-export function DeliveryLineChart({ data }: { data: LineChartData[] }) {
+export function GenericLineChart({ data }: { data: GenericLineData[] }) {
+  const hasSecondValue = data.some(d => d.value2 !== undefined);
+  
   return (
     <ResponsiveContainer width="100%" height={240}>
       <AreaChart data={data}>
         <defs>
-          <linearGradient id="colorEntregue" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id="colorValue1" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="hsl(142, 71%, 45%)" stopOpacity={0.4} />
             <stop offset="100%" stopColor="hsl(142, 71%, 45%)" stopOpacity={0.05} />
           </linearGradient>
-          <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id="colorValue2" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0.3} />
             <stop offset="100%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0.05} />
           </linearGradient>
@@ -113,37 +117,88 @@ export function DeliveryLineChart({ data }: { data: LineChartData[] }) {
         />
         <Area 
           type="monotone" 
-          dataKey="total" 
-          stroke="hsl(217, 91%, 60%)" 
-          strokeWidth={2}
-          fill="url(#colorTotal)"
-          name="Total"
-        />
-        <Area 
-          type="monotone" 
-          dataKey="entregue" 
+          dataKey="value1" 
           stroke="hsl(142, 71%, 45%)" 
           strokeWidth={3}
-          fill="url(#colorEntregue)"
-          name="Entregue"
+          fill="url(#colorValue1)"
+          name={data[0]?.label1 || "Valor"}
         />
+        {hasSecondValue && (
+          <Area 
+            type="monotone" 
+            dataKey="value2" 
+            stroke="hsl(217, 91%, 60%)" 
+            strokeWidth={2}
+            fill="url(#colorValue2)"
+            name={data[0]?.label2 || "Valor 2"}
+          />
+        )}
       </AreaChart>
     </ResponsiveContainer>
   );
 }
 
-interface BarChartData {
-  person: string;
-  entregue: number;
-  total: number;
+// Gráfico de barras vertical genérico
+interface GenericBarData {
+  category: string;
+  count: number;
+  sum?: number;
 }
 
-export function PersonBarChart({ data }: { data: BarChartData[] }) {
-  const top10 = data.slice(0, 10);
-  
+export function GenericBarChart({ data }: { data: GenericBarData[] }) {
+  return (
+    <ResponsiveContainer width="100%" height={220}>
+      <BarChart data={data}>
+        <defs>
+          <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="hsl(142, 71%, 50%)" />
+            <stop offset="100%" stopColor="hsl(142, 71%, 35%)" />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+        <XAxis 
+          dataKey="category" 
+          tick={{ fontSize: 10, fontWeight: 500 }}
+          className="[&_.recharts-cartesian-axis-tick-value]:fill-muted-foreground"
+          interval={0}
+          angle={-25}
+          textAnchor="end"
+          height={60}
+          axisLine={false}
+          tickLine={false}
+        />
+        <YAxis 
+          tick={{ fontSize: 11 }} 
+          className="[&_.recharts-cartesian-axis-tick-value]:fill-muted-foreground"
+          axisLine={false} 
+          tickLine={false} 
+        />
+        <Tooltip 
+          contentStyle={{ 
+            backgroundColor: "hsl(var(--card))", 
+            color: "hsl(var(--card-foreground))",
+            border: "1px solid hsl(var(--border))",
+            borderRadius: "12px",
+            boxShadow: "0 10px 40px -10px rgba(0,0,0,0.3)",
+            fontSize: "12px",
+          }} 
+        />
+        <Bar dataKey="count" fill="url(#barGradient)" radius={[6, 6, 0, 0]} name="Quantidade" />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+// Gráfico de barras horizontal genérico
+interface GenericHorizontalBarData {
+  name: string;
+  value: number;
+}
+
+export function GenericHorizontalBarChart({ data }: { data: GenericHorizontalBarData[] }) {
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <BarChart data={top10} layout="vertical" barGap={0}>
+      <BarChart data={data} layout="vertical" barGap={0}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={true} vertical={false} />
         <XAxis 
           type="number" 
@@ -154,7 +209,7 @@ export function PersonBarChart({ data }: { data: BarChartData[] }) {
         />
         <YAxis 
           type="category" 
-          dataKey="person" 
+          dataKey="name" 
           tick={{ fontSize: 11, fontWeight: 500 }} 
           width={100}
           className="[&_.recharts-cartesian-axis-tick-value]:fill-muted-foreground"
@@ -171,18 +226,19 @@ export function PersonBarChart({ data }: { data: BarChartData[] }) {
             fontSize: "12px",
           }} 
         />
-        <Bar dataKey="entregue" fill="hsl(142, 71%, 45%)" radius={[0, 6, 6, 0]} name="Entregue" />
+        <Bar dataKey="value" fill="hsl(142, 71%, 45%)" radius={[0, 6, 6, 0]} name="Quantidade" />
       </BarChart>
     </ResponsiveContainer>
   );
 }
 
-interface PieChartData {
+// Gráfico de pizza genérico
+interface GenericPieData {
   name: string;
   value: number;
 }
 
-export function StatusPieChart({ data }: { data: PieChartData[] }) {
+export function GenericPieChart({ data }: { data: GenericPieData[] }) {
   const total = data.reduce((sum, d) => sum + d.value, 0);
   
   return (
@@ -238,58 +294,61 @@ export function StatusPieChart({ data }: { data: PieChartData[] }) {
   );
 }
 
-export function TeamBarChart({ data }: { data: { team: string; entregue: number; total: number }[] }) {
+// Progress Ring
+export function ProgressRing({ value, label, size = "md" }: { value: number; label: string; size?: "sm" | "md" | "lg" }) {
+  const dimensions = { sm: 80, md: 100, lg: 120 };
+  const dim = dimensions[size];
+  const radius = dim / 2 - 10;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (value / 100) * circumference;
+  
+  const color = value >= 80 ? "hsl(142, 71%, 45%)" : value >= 50 ? "hsl(37, 91%, 55%)" : "hsl(0, 84%, 60%)";
+
   return (
-    <ResponsiveContainer width="100%" height={220}>
-      <BarChart data={data}>
-        <defs>
-          <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="hsl(142, 71%, 50%)" />
-            <stop offset="100%" stopColor="hsl(142, 71%, 35%)" />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
-        <XAxis 
-          dataKey="team" 
-          tick={{ fontSize: 10, fontWeight: 500 }}
-          className="[&_.recharts-cartesian-axis-tick-value]:fill-muted-foreground"
-          interval={0}
-          angle={-25}
-          textAnchor="end"
-          height={60}
-          axisLine={false}
-          tickLine={false}
-        />
-        <YAxis 
-          tick={{ fontSize: 11 }} 
-          className="[&_.recharts-cartesian-axis-tick-value]:fill-muted-foreground"
-          axisLine={false} 
-          tickLine={false} 
-        />
-        <Tooltip 
-          contentStyle={{ 
-            backgroundColor: "hsl(var(--card))", 
-            color: "hsl(var(--card-foreground))",
-            border: "1px solid hsl(var(--border))",
-            borderRadius: "12px",
-            boxShadow: "0 10px 40px -10px rgba(0,0,0,0.3)",
-            fontSize: "12px",
-          }} 
-        />
-        <Bar dataKey="entregue" fill="url(#barGradient)" radius={[6, 6, 0, 0]} name="Entregue" />
-      </BarChart>
-    </ResponsiveContainer>
+    <div className="flex flex-col items-center group">
+      <div className="relative transition-transform group-hover:scale-110" style={{ width: dim, height: dim }}>
+        <svg className="w-full h-full transform -rotate-90">
+          {/* Background circle */}
+          <circle
+            cx={dim / 2}
+            cy={dim / 2}
+            r={radius}
+            className="stroke-muted"
+            strokeWidth="10"
+            fill="none"
+          />
+          {/* Progress circle */}
+          <circle
+            cx={dim / 2}
+            cy={dim / 2}
+            r={radius}
+            stroke={color}
+            strokeWidth="10"
+            fill="none"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            className="transition-all duration-700 ease-out"
+            style={{ filter: `drop-shadow(0 0 8px ${color})` }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-xl font-black text-card-foreground">{value}%</span>
+        </div>
+      </div>
+      <span className="text-xs font-semibold text-muted-foreground mt-2 uppercase tracking-wide text-center max-w-[80px] truncate">{label}</span>
+    </div>
   );
 }
 
-interface TeamComparisonData {
-  team: string;
-  entregue: number;
-  total: number;
-  taxa: number;
-}
+// Export legacy components for compatibility
+export { GenericLineChart as DeliveryLineChart };
+export { GenericHorizontalBarChart as PersonBarChart };
+export { GenericPieChart as StatusPieChart };
+export { GenericBarChart as TeamBarChart };
 
-export function TeamComparisonChart({ data }: { data: TeamComparisonData[] }) {
+// Legacy team comparison chart
+export function TeamComparisonChart({ data }: { data: { team: string; entregue: number; total: number; taxa: number }[] }) {
   const sortedData = [...data].sort((a, b) => b.taxa - a.taxa);
   const maxTaxa = Math.max(...sortedData.map(d => d.taxa), 100);
 
@@ -354,52 +413,6 @@ export function TeamComparisonChart({ data }: { data: TeamComparisonData[] }) {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-export function ProgressRing({ value, label, size = "md" }: { value: number; label: string; size?: "sm" | "md" | "lg" }) {
-  const dimensions = { sm: 80, md: 100, lg: 120 };
-  const dim = dimensions[size];
-  const radius = dim / 2 - 10;
-  const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (value / 100) * circumference;
-  
-  const color = value >= 80 ? "hsl(142, 71%, 45%)" : value >= 50 ? "hsl(37, 91%, 55%)" : "hsl(0, 84%, 60%)";
-
-  return (
-    <div className="flex flex-col items-center group">
-      <div className="relative transition-transform group-hover:scale-110" style={{ width: dim, height: dim }}>
-        <svg className="w-full h-full transform -rotate-90">
-          {/* Background circle */}
-          <circle
-            cx={dim / 2}
-            cy={dim / 2}
-            r={radius}
-            className="stroke-muted"
-            strokeWidth="10"
-            fill="none"
-          />
-          {/* Progress circle */}
-          <circle
-            cx={dim / 2}
-            cy={dim / 2}
-            r={radius}
-            stroke={color}
-            strokeWidth="10"
-            fill="none"
-            strokeDasharray={circumference}
-            strokeDashoffset={strokeDashoffset}
-            strokeLinecap="round"
-            className="transition-all duration-700 ease-out"
-            style={{ filter: `drop-shadow(0 0 8px ${color})` }}
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-2xl font-black text-card-foreground">{value}%</span>
-        </div>
-      </div>
-      <span className="text-xs font-semibold text-muted-foreground mt-3 uppercase tracking-wide">{label}</span>
     </div>
   );
 }

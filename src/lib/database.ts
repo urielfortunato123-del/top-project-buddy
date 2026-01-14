@@ -1,10 +1,22 @@
 import { get, set, del, keys, clear } from "idb-keyval";
 
-export interface DatasetRow {
-  date: string;
-  person: string;
-  status: string;
-  team?: string;
+// Tipos de dados detectados automaticamente
+export type ColumnType = "date" | "number" | "category" | "text" | "id";
+
+export interface ColumnMetadata {
+  name: string;
+  originalIndex: number;
+  type: ColumnType;
+  uniqueValues: string[];
+  sampleValues: any[];
+  isNumeric: boolean;
+  isDate: boolean;
+  isEmpty: boolean;
+}
+
+export interface GenericRow {
+  [key: string]: any;
+  _rowIndex: number;
 }
 
 export interface Dataset {
@@ -13,10 +25,27 @@ export interface Dataset {
   createdAt: string;
   updatedAt: string;
   rawGrid: any[][];
-  rows: DatasetRow[];
-  teams: string[];
-  people: string[];
-  statuses: string[];
+  
+  // Estrutura genérica
+  columns: ColumnMetadata[];
+  rows: GenericRow[];
+  
+  // Campos detectados automaticamente (podem não existir)
+  detectedDateColumn?: string;
+  detectedCategoryColumns: string[];
+  detectedNumericColumns: string[];
+  detectedTextColumns: string[];
+  
+  // Estatísticas gerais
+  totalRows: number;
+  summary: DatasetSummary;
+}
+
+export interface DatasetSummary {
+  totalRecords: number;
+  dateRange?: { from: string; to: string };
+  categoryCounts: { [column: string]: { [value: string]: number } };
+  numericStats: { [column: string]: { min: number; max: number; avg: number; sum: number } };
 }
 
 const DATASETS_PREFIX = "dataset_";

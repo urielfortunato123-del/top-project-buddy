@@ -1,22 +1,18 @@
 import React, { useMemo, useState, useRef } from "react";
 import { 
-  CheckCircle, AlertCircle, Coffee, Clock, Users, 
-  FileDown, Loader2, Target, Award 
+  FileDown, Loader2, BarChart3, PieChart, TrendingUp, 
+  Hash, Calendar, Tag, Users, Database, Layers
 } from "lucide-react";
-import type { Dataset } from "@/lib/database";
-import type { DateRange } from "@/lib/dateRange";
+import type { Dataset, ColumnMetadata } from "@/lib/database";
 import { KPICard } from "./KPICard";
-import { KPIDetailModal, type KPIType } from "./KPIDetailModal";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
-import { exportInteractiveZIP } from "@/lib/reportExport";
 import {
   ChartCard,
-  DeliveryLineChart,
-  PersonBarChart,
-  StatusPieChart,
-  TeamBarChart,
-  TeamComparisonChart,
+  GenericLineChart,
+  GenericBarChart,
+  GenericPieChart,
+  GenericHorizontalBarChart,
   ProgressRing,
 } from "./Charts";
 
@@ -25,123 +21,239 @@ interface DashboardViewProps {
   personFilter: string;
   statusFilter: string;
   teamFilter: string;
-  dateRange: DateRange;
-}
-
-function prettyStatus(s: string) {
-  if (s === "VAZIO") return "Sem Info";
-  return s;
+  dateRange: { from?: Date; to?: Date };
 }
 
 export function DashboardView({ dataset, personFilter, statusFilter, teamFilter, dateRange }: DashboardViewProps) {
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalType, setModalType] = useState<KPIType>("taxa");
   const [exporting, setExporting] = useState(false);
   const dashboardRef = useRef<HTMLDivElement>(null);
 
+  // Filtra dados baseado nos filtros ativos
   const filtered = useMemo(() => {
-    let data = dataset.rows;
+    let data = [...dataset.rows];
     
-    if (dateRange.from) {
+    const dateCol = dataset.detectedDateColumn;
+    
+    if (dateCol && dateRange.from) {
       const fromStr = dateRange.from.toISOString().slice(0, 10);
-      data = data.filter((r) => r.date >= fromStr);
+      data = data.filter((r) => r[dateCol] >= fromStr);
     }
-    if (dateRange.to) {
+    if (dateCol && dateRange.to) {
       const toStr = dateRange.to.toISOString().slice(0, 10);
-      data = data.filter((r) => r.date <= toStr);
+      data = data.filter((r) => r[dateCol] <= toStr);
     }
     
-    if (teamFilter !== "ALL") data = data.filter((r) => r.team === teamFilter);
-    if (personFilter !== "ALL") data = data.filter((r) => r.person === personFilter);
-    if (statusFilter !== "ALL") data = data.filter((r) => r.status === statusFilter);
+    // Aplica filtros de categoria genéricos
+    if (teamFilter !== "ALL" && dataset.detectedCategoryColumns[0]) {
+      data = data.filter((r) => r[dataset.detectedCategoryColumns[0]] === teamFilter);
+    }
+    if (personFilter !== "ALL" && dataset.detectedCategoryColumns[1]) {
+      data = data.filter((r) => r[dataset.detectedCategoryColumns[1]] === personFilter);
+    }
+    if (statusFilter !== "ALL" && dataset.detectedCategoryColumns[2]) {
+      data = data.filter((r) => r[dataset.detectedCategoryColumns[2]] === statusFilter);
+    }
+    
     return data;
-  }, [dataset.rows, personFilter, statusFilter, teamFilter, dateRange]);
+  }, [dataset, personFilter, statusFilter, teamFilter, dateRange]);
 
+  // Gera KPIs dinâmicos
   const kpis = useMemo(() => {
-    const total = filtered.length;
-    const entregue = filtered.filter((r) => r.status === "ENTREGUE").length;
-    const folga = filtered.filter((r) => r.status === "FOLGA").length;
-    const banco = filtered.filter((r) => r.status === "BANCO DE HORAS").length;
-    const vazio = filtered.filter((r) => r.status === "VAZIO").length;
-    const falta = filtered.filter((r) => r.status === "FALTA").length;
-    const entreguesPct = total ? Math.round((entregue / total) * 100) : 0;
-    const uniquePeople = new Set(filtered.map((r) => r.person)).size;
-    const uniqueDays = new Set(filtered.map((r) => r.date)).size;
-    const uniqueTeams = new Set(filtered.map((r) => r.team)).size;
+    const result: Array<{
+      title: string;
+      value: string;
+      subtitle: string;
+      icon: React.ReactNode;
+      variant: "default" | "success" | "warning" | "danger" | "info" | "purple";
+    }> = [];
     
-    return { total, entregue, folga, banco, vazio, falta, entreguesPct, uniquePeople, uniqueDays, uniqueTeams };
-  }, [filtered]);
-
-  const seriesByDay = useMemo(() => {
-    const map = new Map<string, { date: string; entregue: number; total: number }>();
-    for (const r of filtered) {
-      const cur = map.get(r.date) || { date: r.date, entregue: 0, total: 0 };
-      cur.total += 1;
-      if (r.status === "ENTREGUE") cur.entregue += 1;
-      map.set(r.date, cur);
+    // KPI: Total de registros
+    result.push({
+      title: "Total Registros",
+      value: filtered.length.toLocaleString("pt-BR"),
+      subtitle: `de ${dataset.totalRows} no arquivo`,
+      icon: <Database className="w-4 h-4 md:w-5 md:h-5 text-primary" />,
+      variant: "default",
+    });
+    
+    // KPIs para cada coluna numérica (soma e média)
+    for (const colName of dataset.detectedNumericColumns.slice(0, 2)) {
+      const stats = dataset.summary.numericStats[colName];
+      if (stats) {
+        result.push({
+          title: `Soma ${colName}`,
+          value: stats.sum.toLocaleString("pt-BR", { maximumFractionDigits: 2 }),
+          subtitle: `Média: ${stats.avg.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}`,
+          icon: <Hash className="w-4 h-4 md:w-5 md:h-5 text-accent" />,
+          variant: "info",
+        });
+      }
     }
-    return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
-  }, [filtered]);
-
-  const barByPerson = useMemo(() => {
-    const map = new Map<string, { person: string; entregue: number; total: number }>();
-    for (const r of filtered) {
-      const cur = map.get(r.person) || { person: r.person, entregue: 0, total: 0 };
-      cur.total += 1;
-      if (r.status === "ENTREGUE") cur.entregue += 1;
-      map.set(r.person, cur);
+    
+    // KPIs para colunas de categoria (contagem de valores únicos)
+    for (const colName of dataset.detectedCategoryColumns.slice(0, 3)) {
+      const counts = dataset.summary.categoryCounts[colName];
+      if (counts) {
+        const uniqueCount = Object.keys(counts).length;
+        const topValue = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+        
+        result.push({
+          title: colName,
+          value: uniqueCount.toLocaleString("pt-BR"),
+          subtitle: topValue ? `Top: ${topValue[0]} (${topValue[1]})` : "valores únicos",
+          icon: <Tag className="w-4 h-4 md:w-5 md:h-5 text-secondary" />,
+          variant: "warning",
+        });
+      }
     }
-    return Array.from(map.values()).sort((a, b) => b.entregue - a.entregue);
-  }, [filtered]);
-
-  const pieByStatus = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const r of filtered) map.set(r.status, (map.get(r.status) || 0) + 1);
-    return Array.from(map.entries())
-      .map(([status, value]) => ({ name: prettyStatus(status), value }))
-      .sort((a, b) => b.value - a.value);
-  }, [filtered]);
-
-  const barByTeam = useMemo(() => {
-    const map = new Map<string, { team: string; entregue: number; total: number }>();
-    for (const r of filtered) {
-      const team = r.team || "GERAL";
-      const cur = map.get(team) || { team, entregue: 0, total: 0 };
-      cur.total += 1;
-      if (r.status === "ENTREGUE") cur.entregue += 1;
-      map.set(team, cur);
-    }
-    return Array.from(map.values()).sort((a, b) => b.entregue - a.entregue);
-  }, [filtered]);
-
-  const teamComparison = useMemo(() => {
-    return barByTeam.map(item => ({
-      ...item,
-      taxa: item.total > 0 ? Math.round((item.entregue / item.total) * 100) : 0
-    }));
-  }, [barByTeam]);
-
-  const openModal = (type: KPIType) => {
-    setModalType(type);
-    setModalOpen(true);
-  };
-
-  const handleExportHTML = async () => {
-    setExporting(true);
-    toast({ title: "Gerando relatório...", description: "Aguarde enquanto criamos o HTML interativo" });
-
-    try {
-      await exportInteractiveZIP(dataset, {
-        team: teamFilter,
-        person: personFilter,
-        status: statusFilter,
-        dateFrom: dateRange.from,
-        dateTo: dateRange.to,
+    
+    // KPI: Data range se existir
+    if (dataset.summary.dateRange) {
+      result.push({
+        title: "Período",
+        value: `${dataset.summary.dateRange.from.slice(5)} a ${dataset.summary.dateRange.to.slice(5)}`,
+        subtitle: `Coluna: ${dataset.detectedDateColumn}`,
+        icon: <Calendar className="w-4 h-4 md:w-5 md:h-5 text-violet-500" />,
+        variant: "purple",
       });
-      toast({ title: "Relatório exportado com sucesso!" });
+    }
+    
+    return result.slice(0, 6); // Máximo 6 KPIs
+  }, [dataset, filtered]);
+
+  // Gera dados para gráfico de linha (se tiver coluna de data)
+  const lineChartData = useMemo(() => {
+    const dateCol = dataset.detectedDateColumn;
+    if (!dateCol) return null;
+    
+    const numCol = dataset.detectedNumericColumns[0];
+    const catCol = dataset.detectedCategoryColumns[0];
+    
+    const map = new Map<string, { date: string; count: number; sum: number }>();
+    
+    for (const r of filtered) {
+      const date = r[dateCol];
+      if (!date) continue;
+      
+      const cur = map.get(date) || { date, count: 0, sum: 0 };
+      cur.count += 1;
+      if (numCol) cur.sum += parseFloat(r[numCol]) || 0;
+      map.set(date, cur);
+    }
+    
+    return Array.from(map.values())
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(item => ({
+        date: item.date,
+        value1: item.count,
+        value2: numCol ? item.sum : undefined,
+        label1: "Registros",
+        label2: numCol || undefined,
+      }));
+  }, [dataset, filtered]);
+
+  // Gera dados para gráfico de pizza (primeira coluna de categoria)
+  const pieChartData = useMemo(() => {
+    const catCol = dataset.detectedCategoryColumns[0];
+    if (!catCol) return null;
+    
+    const counts = new Map<string, number>();
+    for (const r of filtered) {
+      const v = String(r[catCol] || "(vazio)").trim();
+      counts.set(v, (counts.get(v) || 0) + 1);
+    }
+    
+    return Array.from(counts.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+  }, [dataset, filtered]);
+
+  // Gera dados para gráfico de barras (segunda coluna de categoria)
+  const barChartData = useMemo(() => {
+    const catCol = dataset.detectedCategoryColumns[1] || dataset.detectedCategoryColumns[0];
+    if (!catCol) return null;
+    
+    const numCol = dataset.detectedNumericColumns[0];
+    
+    const map = new Map<string, { category: string; count: number; sum: number }>();
+    
+    for (const r of filtered) {
+      const cat = String(r[catCol] || "(vazio)").trim();
+      const cur = map.get(cat) || { category: cat, count: 0, sum: 0 };
+      cur.count += 1;
+      if (numCol) cur.sum += parseFloat(r[numCol]) || 0;
+      map.set(cat, cur);
+    }
+    
+    return Array.from(map.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  }, [dataset, filtered]);
+
+  // Gera dados para gráfico horizontal (terceira coluna de categoria ou texto)
+  const horizontalBarData = useMemo(() => {
+    const catCol = dataset.detectedCategoryColumns[2] || 
+                   dataset.detectedTextColumns[0] || 
+                   dataset.detectedCategoryColumns[0];
+    if (!catCol) return null;
+    
+    const counts = new Map<string, number>();
+    for (const r of filtered) {
+      const v = String(r[catCol] || "(vazio)").trim();
+      counts.set(v, (counts.get(v) || 0) + 1);
+    }
+    
+    return Array.from(counts.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+  }, [dataset, filtered]);
+
+  // Progress rings para categorias principais
+  const progressRings = useMemo(() => {
+    const catCol = dataset.detectedCategoryColumns[0];
+    if (!catCol) return [];
+    
+    const counts = dataset.summary.categoryCounts[catCol];
+    if (!counts) return [];
+    
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
+    
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([label, count]) => ({
+        label,
+        value: total > 0 ? Math.round((count / total) * 100) : 0,
+      }));
+  }, [dataset]);
+
+  const handleExport = async () => {
+    setExporting(true);
+    toast({ title: "Exportando...", description: "Preparando dados para download" });
+    
+    try {
+      // Exporta como JSON
+      const exportData = {
+        dataset: dataset.name,
+        exportedAt: new Date().toISOString(),
+        summary: dataset.summary,
+        data: filtered,
+      };
+      
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${dataset.name}-export.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      toast({ title: "Exportado com sucesso!" });
     } catch (error) {
-      console.error("Error exporting HTML:", error);
-      toast({ title: "Erro ao exportar relatório", variant: "destructive" });
+      console.error("Error exporting:", error);
+      toast({ title: "Erro ao exportar", variant: "destructive" });
     } finally {
       setExporting(false);
     }
@@ -151,9 +263,9 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground">
         <div className="text-center">
-          <AlertCircle className="w-16 h-16 mx-auto mb-6 text-muted-foreground/30" />
+          <Database className="w-16 h-16 mx-auto mb-6 text-muted-foreground/30" />
           <p className="text-xl font-semibold">Nenhum dado para exibir</p>
-          <p className="text-sm mt-2">Importe um arquivo Excel ou ajuste os filtros</p>
+          <p className="text-sm mt-2">Importe um arquivo Excel/CSV ou ajuste os filtros</p>
         </div>
       </div>
     );
@@ -167,7 +279,7 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           <div className="flex items-center gap-2">
             <div className="w-2 h-8 rounded-full bg-primary" />
             <div>
-              <h1 className="font-black text-lg text-card-foreground tracking-tight">Dashboard RDA</h1>
+              <h1 className="font-black text-lg text-card-foreground tracking-tight">Dashboard</h1>
               <p className="text-xs text-muted-foreground">{dataset.name}</p>
             </div>
           </div>
@@ -175,14 +287,16 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           {/* Quick stats badges */}
           <div className="hidden md:flex items-center gap-2">
             <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full">
-              {kpis.uniquePeople} pessoas
+              {dataset.columns.length} colunas
             </span>
             <span className="px-3 py-1 bg-accent/10 text-accent text-xs font-bold rounded-full">
-              {kpis.uniqueDays} dias
+              {filtered.length} registros
             </span>
-            <span className="px-3 py-1 bg-secondary/10 text-secondary text-xs font-bold rounded-full">
-              {kpis.uniqueTeams} equipes
-            </span>
+            {dataset.detectedCategoryColumns.length > 0 && (
+              <span className="px-3 py-1 bg-secondary/10 text-secondary text-xs font-bold rounded-full">
+                {dataset.detectedCategoryColumns.length} categorias
+              </span>
+            )}
           </div>
         </div>
         
@@ -190,12 +304,12 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           <Button
             variant="outline"
             size="sm"
-            onClick={handleExportHTML}
+            onClick={handleExport}
             disabled={exporting}
             className="gap-2 font-semibold"
           >
             {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-            <span className="hidden sm:inline">Exportar Relatório</span>
+            <span className="hidden sm:inline">Exportar</span>
           </Button>
         </div>
       </div>
@@ -203,139 +317,104 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
       {/* Dashboard Content */}
       <div ref={dashboardRef} className="p-4 md:p-6 space-y-6 overflow-auto flex-1 bg-gradient-to-br from-background via-background to-muted/30">
         
-        {/* KPI Cards - 2 rows of 3 for larger cards */}
+        {/* KPI Cards Dinâmicos */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
-          <KPICard
-            title="Taxa de Entrega"
-            value={`${kpis.entreguesPct}%`}
-            subtitle={`${kpis.entregue} de ${kpis.total} registros`}
-            icon={<Target className="w-4 h-4 md:w-5 md:h-5 text-primary" />}
-            variant="success"
-            size="sm"
-            trend={kpis.entreguesPct >= 80 ? "up" : kpis.entreguesPct >= 50 ? "neutral" : "down"}
-            onClick={() => openModal("taxa")}
-          />
-          <KPICard
-            title="Total Entregue"
-            value={kpis.entregue.toLocaleString("pt-BR")}
-            subtitle="Marcados como ENTREGUE"
-            icon={<CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-primary" />}
-            variant="success"
-            size="sm"
-            onClick={() => openModal("entregue")}
-          />
-          <KPICard
-            title="Pendências"
-            value={(kpis.vazio + kpis.falta).toLocaleString("pt-BR")}
-            subtitle={`${kpis.vazio} vazios + ${kpis.falta} faltas`}
-            icon={<AlertCircle className="w-4 h-4 md:w-5 md:h-5 text-destructive" />}
-            variant="danger"
-            size="sm"
-            onClick={() => openModal("pendencias")}
-          />
-          <KPICard
-            title="Folgas"
-            value={kpis.folga.toLocaleString("pt-BR")}
-            subtitle="Dias de descanso"
-            icon={<Coffee className="w-4 h-4 md:w-5 md:h-5 text-accent" />}
-            variant="info"
-            size="sm"
-            onClick={() => openModal("folgas")}
-          />
-          <KPICard
-            title="Banco Horas"
-            value={kpis.banco.toLocaleString("pt-BR")}
-            subtitle="Compensações registradas"
-            icon={<Clock className="w-4 h-4 md:w-5 md:h-5 text-violet-500" />}
-            variant="purple"
-            size="sm"
-            onClick={() => openModal("banco")}
-          />
-          <KPICard
-            title="Colaboradores"
-            value={kpis.uniquePeople.toLocaleString("pt-BR")}
-            subtitle={`Em ${kpis.uniqueTeams} equipes`}
-            icon={<Users className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />}
-            size="sm"
-            onClick={() => openModal("pessoas")}
-          />
+          {kpis.map((kpi, idx) => (
+            <KPICard
+              key={idx}
+              title={kpi.title}
+              value={kpi.value}
+              subtitle={kpi.subtitle}
+              icon={kpi.icon}
+              variant={kpi.variant}
+              size="sm"
+            />
+          ))}
         </div>
 
-        <KPIDetailModal
-          open={modalOpen}
-          onOpenChange={setModalOpen}
-          type={modalType}
-          data={filtered}
-          kpis={kpis}
-        />
-
-        {/* Charts Row 1 - Full width trend + Pie */}
+        {/* Charts Row 1 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <ChartCard 
-            title="Tendência de Entregas" 
-            subtitle="Evolução diária no período"
-            className="lg:col-span-2"
-          >
-            <DeliveryLineChart data={seriesByDay} />
-          </ChartCard>
+          {lineChartData && lineChartData.length > 1 && (
+            <ChartCard 
+              title={`Evolução por ${dataset.detectedDateColumn}`}
+              subtitle="Tendência ao longo do tempo"
+              className="lg:col-span-2"
+            >
+              <GenericLineChart data={lineChartData} />
+            </ChartCard>
+          )}
           
-          <ChartCard 
-            title="Distribuição por Status" 
-            subtitle="Composição geral"
-          >
-            <StatusPieChart data={pieByStatus} />
-          </ChartCard>
+          {pieChartData && pieChartData.length > 0 && (
+            <ChartCard 
+              title={`Distribuição: ${dataset.detectedCategoryColumns[0]}`}
+              subtitle="Composição geral"
+            >
+              <GenericPieChart data={pieChartData} />
+            </ChartCard>
+          )}
         </div>
 
-        {/* Charts Row 2 - Three columns */}
+        {/* Charts Row 2 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <ChartCard 
-            title="Top 10 por Pessoa" 
-            subtitle="Ranking de entregas"
-            action={
-              <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-1 rounded-full">
-                <Award className="w-3 h-3 inline mr-1" />
-                TOP 10
-              </span>
-            }
-          >
-            <PersonBarChart data={barByPerson} />
-          </ChartCard>
+          {barChartData && barChartData.length > 0 && (
+            <ChartCard 
+              title={`Por ${dataset.detectedCategoryColumns[1] || dataset.detectedCategoryColumns[0] || "Categoria"}`}
+              subtitle="Top 10 por quantidade"
+            >
+              <GenericBarChart data={barChartData} />
+            </ChartCard>
+          )}
           
-          <ChartCard 
-            title="Entregas por Equipe" 
-            subtitle="Volume absoluto"
-          >
-            <TeamBarChart data={barByTeam} />
-          </ChartCard>
+          {horizontalBarData && horizontalBarData.length > 0 && (
+            <ChartCard 
+              title={`Ranking: ${dataset.detectedCategoryColumns[2] || dataset.detectedTextColumns[0] || "Valores"}`}
+              subtitle="Distribuição horizontal"
+            >
+              <GenericHorizontalBarChart data={horizontalBarData} />
+            </ChartCard>
+          )}
 
-          <ChartCard 
-            title="Taxa por Equipe" 
-            subtitle="Comparativo de performance"
-          >
-            <TeamComparisonChart data={teamComparison} />
-          </ChartCard>
+          {progressRings.length > 0 && (
+            <ChartCard 
+              title="Métricas Rápidas"
+              subtitle={`Taxas por ${dataset.detectedCategoryColumns[0]}`}
+            >
+              <div className="flex flex-wrap justify-around items-center gap-4 py-4">
+                {progressRings.map((ring, idx) => (
+                  <ProgressRing key={idx} value={ring.value} label={ring.label} size="md" />
+                ))}
+              </div>
+            </ChartCard>
+          )}
         </div>
 
-        {/* Quick Metrics - Progress Rings */}
+        {/* Info sobre colunas detectadas */}
         <ChartCard 
-          title="Métricas Rápidas" 
-          subtitle="Visão consolidada das taxas"
+          title="Estrutura Detectada"
+          subtitle="Colunas identificadas automaticamente"
         >
-          <div className="flex flex-wrap justify-around items-center gap-6 py-4">
-            <ProgressRing value={kpis.entreguesPct} label="Taxa Entrega" size="lg" />
-            <ProgressRing 
-              value={kpis.total ? Math.round((kpis.folga / kpis.total) * 100) : 0} 
-              label="Taxa Folga" 
-            />
-            <ProgressRing 
-              value={kpis.total ? Math.round(((kpis.vazio + kpis.falta) / kpis.total) * 100) : 0} 
-              label="Pendências" 
-            />
-            <ProgressRing 
-              value={kpis.total ? Math.round((kpis.banco / kpis.total) * 100) : 0} 
-              label="Banco Horas" 
-            />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-2">
+            {dataset.detectedDateColumn && (
+              <div className="flex items-center gap-2 text-sm">
+                <Calendar className="w-4 h-4 text-violet-500" />
+                <span className="text-muted-foreground">Data:</span>
+                <span className="font-semibold truncate">{dataset.detectedDateColumn}</span>
+              </div>
+            )}
+            {dataset.detectedNumericColumns.slice(0, 2).map((col, idx) => (
+              <div key={col} className="flex items-center gap-2 text-sm">
+                <Hash className="w-4 h-4 text-accent" />
+                <span className="text-muted-foreground">Número:</span>
+                <span className="font-semibold truncate">{col}</span>
+              </div>
+            ))}
+            {dataset.detectedCategoryColumns.slice(0, 3).map((col, idx) => (
+              <div key={col} className="flex items-center gap-2 text-sm">
+                <Tag className="w-4 h-4 text-secondary" />
+                <span className="text-muted-foreground">Categoria:</span>
+                <span className="font-semibold truncate">{col}</span>
+              </div>
+            ))}
           </div>
         </ChartCard>
       </div>
