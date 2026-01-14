@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import type { Dataset, ColumnMetadata } from "@/lib/database";
 import { KPICard } from "./KPICard";
+import { KPIDetailModal } from "./KPIDetailModal";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { exportHTML } from "@/lib/htmlExport";
@@ -27,6 +28,8 @@ interface DashboardViewProps {
 
 export function DashboardView({ dataset, personFilter, statusFilter, teamFilter, dateRange }: DashboardViewProps) {
   const [exporting, setExporting] = useState(false);
+  const [selectedKPI, setSelectedKPI] = useState<any>(null);
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
   const dashboardRef = useRef<HTMLDivElement>(null);
 
   // Safe accessors
@@ -67,7 +70,7 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     return data;
   }, [dataset, safeRows, safeCategoryColumns, personFilter, statusFilter, teamFilter, dateRange]);
 
-  // Gera KPIs dinâmicos
+  // Gera KPIs dinâmicos com dados expandidos
   const kpis = useMemo(() => {
     if (!dataset) return [];
     
@@ -77,15 +80,26 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
       subtitle: string;
       icon: React.ReactNode;
       variant: "default" | "success" | "warning" | "danger" | "info" | "purple";
+      type: "count" | "numeric" | "category" | "date";
+      columnName?: string;
+      stats?: { min?: number; max?: number; avg?: number; sum?: number };
+      distribution?: Array<{ name: string; value: number }>;
+      total?: number;
+      percentage?: number;
     }> = [];
     
     // KPI: Total de registros
+    const filteredCount = filtered?.length ?? 0;
+    const totalCount = dataset.totalRows ?? 0;
     result.push({
       title: "Total Registros",
-      value: (filtered?.length ?? 0).toLocaleString("pt-BR"),
-      subtitle: `de ${dataset.totalRows ?? 0} no arquivo`,
+      value: filteredCount.toLocaleString("pt-BR"),
+      subtitle: `de ${totalCount} no arquivo`,
       icon: <Database className="w-4 h-4 md:w-5 md:h-5 text-primary" />,
       variant: "default",
+      type: "count",
+      total: totalCount,
+      percentage: totalCount > 0 ? (filteredCount / totalCount) * 100 : 100,
     });
     
     // KPIs para cada coluna numérica (soma e média)
@@ -98,6 +112,14 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           subtitle: `Média: ${stats.avg.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}`,
           icon: <Hash className="w-4 h-4 md:w-5 md:h-5 text-accent" />,
           variant: "info",
+          type: "numeric",
+          columnName: colName,
+          stats: {
+            min: stats.min,
+            max: stats.max,
+            avg: stats.avg,
+            sum: stats.sum,
+          },
         });
       }
     }
@@ -106,9 +128,10 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     for (const colName of safeCategoryColumns.slice(0, 3)) {
       const counts = safeSummary.categoryCounts?.[colName];
       if (counts) {
-        const uniqueCount = Object.keys(counts).length;
         const entries = Object.entries(counts) as [string, number][];
-        const topValue = entries.sort((a, b) => b[1] - a[1])[0];
+        const sortedEntries = [...entries].sort((a, b) => b[1] - a[1]);
+        const uniqueCount = entries.length;
+        const topValue = sortedEntries[0];
         
         result.push({
           title: colName,
@@ -116,6 +139,9 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           subtitle: topValue ? `Top: ${topValue[0]} (${topValue[1]})` : "valores únicos",
           icon: <Tag className="w-4 h-4 md:w-5 md:h-5 text-secondary" />,
           variant: "warning",
+          type: "category",
+          columnName: colName,
+          distribution: sortedEntries.map(([name, value]) => ({ name, value })),
         });
       }
     }
@@ -128,11 +154,18 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
         subtitle: `Coluna: ${dataset.detectedDateColumn ?? ''}`,
         icon: <Calendar className="w-4 h-4 md:w-5 md:h-5 text-violet-500" />,
         variant: "purple",
+        type: "date",
+        columnName: dataset.detectedDateColumn,
       });
     }
     
     return result.slice(0, 6); // Máximo 6 KPIs
   }, [dataset, filtered, safeNumericColumns, safeCategoryColumns, safeSummary]);
+
+  const handleKPIClick = (kpi: typeof kpis[0]) => {
+    setSelectedKPI(kpi);
+    setKpiModalOpen(true);
+  };
 
   // Gera dados para gráfico de linha (se tiver coluna de data)
   const lineChartData = useMemo(() => {
@@ -370,13 +403,17 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
               icon={kpi.icon}
               variant={kpi.variant}
               size="sm"
-              onClick={() => toast({ 
-                title: kpi.title, 
-                description: `${kpi.value} - ${kpi.subtitle}` 
-              })}
+              onClick={() => handleKPIClick(kpi)}
             />
           ))}
         </div>
+
+        {/* KPI Detail Modal */}
+        <KPIDetailModal
+          open={kpiModalOpen}
+          onOpenChange={setKpiModalOpen}
+          kpi={selectedKPI}
+        />
 
         {/* Charts Row 1 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
