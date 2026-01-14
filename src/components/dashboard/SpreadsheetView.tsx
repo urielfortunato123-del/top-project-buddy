@@ -1,21 +1,22 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { Dataset } from "@/lib/database";
+import { cn } from "@/lib/utils";
 
+type Chip = "ENT" | "FOL" | "BAN" | "FAL" | "ATE" | "FER" | "-" | "";
 type FilterOp = "contains" | "equals";
 type ColFilter = { op: FilterOp; value: string };
 
-type RowKind = "teams" | "people" | "dataHeader" | "normal";
-
-type Sel = {
-  active: boolean;
-  start: { r: number; c: number } | null;
-  end: { r: number; c: number } | null;
-};
+interface SpreadsheetViewProps {
+  dataset: Dataset;
+}
 
 function cellToText(v: unknown): string {
   if (v === null || v === undefined) return "";
-  if (typeof v === "object") return "[obj]";
-  return String(v);
+  const t = typeof v;
+  if (t === "string") return v as string;
+  if (t === "number" || t === "boolean" || t === "bigint") return String(v);
+  if (v instanceof Date) return v.toISOString();
+  return "[obj]";
 }
 
 function excelCol(i: number): string {
@@ -33,43 +34,31 @@ function normalize(s: string): string {
   return s.trim().toLowerCase();
 }
 
-function detectChip(v: string): string {
-  const x = v.trim().toUpperCase();
-  if (!x) return "";
-  if (x === "-" || x === "0") return "-";
-  if (x.includes("ENT")) return "ENT";
-  if (x.includes("FOL")) return "FOL";
-  if (x.includes("BAN")) return "BAN";
-  if (x.includes("FAL")) return "FAL";
-  if (x.includes("ATE")) return "ATE";
-  if (x.includes("FÉR") || x.includes("FER")) return "FER";
+function detectChip(value: string): Chip {
+  const v = value.trim().toUpperCase();
+  if (!v) return "";
+  if (v === "-" || v === "0") return "-";
+  if (v.includes("ENT")) return "ENT";
+  if (v.includes("FOL")) return "FOL";
+  if (v.includes("BAN")) return "BAN";
+  if (v.includes("FAL")) return "FAL";
+  if (v.includes("ATE")) return "ATE";
+  if (v.includes("FÉR") || v.includes("FER")) return "FER";
   return "";
 }
 
-function chipClass(chip: string): string {
-  // Somente tokens sem cores hard-coded
-  switch (chip) {
-    case "ENT":
-      return "bg-primary/15 text-foreground border-primary/30";
-    case "FOL":
-      return "bg-info/15 text-foreground border-info/30";
-    case "BAN":
-      return "bg-secondary/15 text-foreground border-secondary/30";
-    case "FAL":
-      return "bg-destructive/15 text-foreground border-destructive/30";
-    case "ATE":
-      return "bg-accent/15 text-foreground border-accent/30";
-    case "FER":
-      return "bg-muted text-foreground border-border";
-    case "-":
-      return "bg-muted/50 text-muted-foreground border-border";
-    default:
-      return "";
-  }
+function chipClass(chip: Chip): string {
+  if (chip === "ENT") return "bg-emerald-100 text-emerald-700 border-emerald-200";
+  if (chip === "FOL") return "bg-blue-100 text-blue-700 border-blue-200";
+  if (chip === "BAN") return "bg-amber-100 text-amber-800 border-amber-200";
+  if (chip === "FAL") return "bg-red-100 text-red-700 border-red-200";
+  if (chip === "ATE") return "bg-violet-100 text-violet-700 border-violet-200";
+  if (chip === "FER") return "bg-sky-100 text-sky-700 border-sky-200";
+  if (chip === "-") return "bg-muted text-muted-foreground border-border";
+  return "";
 }
 
-function rowKind(row: unknown[], rowIndex: number): RowKind {
-  // Seu formato: linha 2 = equipes, linha 3 = pessoas (0-based: 1 e 2)
+function rowKind(row: unknown[], rowIndex: number): "teams" | "people" | "dataHeader" | "normal" {
   if (rowIndex === 1) return "teams";
   if (rowIndex === 2) return "people";
   const a = cellToText(row?.[0]).trim().toUpperCase();
@@ -77,85 +66,70 @@ function rowKind(row: unknown[], rowIndex: number): RowKind {
   return "normal";
 }
 
-function isCellSelected(sel: Sel, r: number, c: number): boolean {
-  if (!sel.start || !sel.end) return false;
-  const r1 = Math.min(sel.start.r, sel.end.r);
-  const r2 = Math.max(sel.start.r, sel.end.r);
-  const c1 = Math.min(sel.start.c, sel.end.c);
-  const c2 = Math.max(sel.start.c, sel.end.c);
-  return r >= r1 && r <= r2 && c >= c1 && c <= c2;
-}
-
-export function SpreadsheetView({ dataset }: { dataset: Dataset | null }) {
-  // UI controls
-  const [query, setQuery] = useState<string>("");
-  const [compact, setCompact] = useState<boolean>(true);
-  const [showFields, setShowFields] = useState<boolean>(false);
-
-  // paging
-  const [fullMode, setFullMode] = useState<boolean>(false);
+export function SpreadsheetView({ dataset }: SpreadsheetViewProps) {
+  const [query, setQuery] = useState("");
+  const [compact, setCompact] = useState(true);
+  const [showFields, setShowFields] = useState(false);
+  const [fullMode, setFullMode] = useState(false);
   const [pageSize, setPageSize] = useState<number>(500);
-  const [page, setPage] = useState<number>(1);
+  const [page, setPage] = useState(1);
 
-  // column visibility + filters (prefer arrays/records para reduzir carga do checker)
-  const [hiddenCols, setHiddenCols] = useState<number[]>([]); // 0-based
+  const [hiddenCols, setHiddenCols] = useState<number[]>([]);
+  const hiddenSet = useMemo(() => new Set(hiddenCols), [hiddenCols]);
+
   const [colFilters, setColFilters] = useState<Record<string, ColFilter>>({});
 
-  // header filter popover
   const [filterOpen, setFilterOpen] = useState<{ col: number; x: number; y: number } | null>(null);
   const [filterDraftOp, setFilterDraftOp] = useState<FilterOp>("contains");
-  const [filterDraftValue, setFilterDraftValue] = useState<string>("");
+  const [filterDraftValue, setFilterDraftValue] = useState("");
 
-  // selection
-  const [sel, setSel] = useState<Sel>({ active: false, start: null, end: null });
+  const [sel, setSel] = useState<{
+    active: boolean;
+    start: { r: number; c: number } | null;
+    end: { r: number; c: number } | null;
+  }>({ active: false, start: null, end: null });
 
-  // virtualization
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const [scrollTop, setScrollTop] = useState<number>(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
 
   const grid: unknown[][] = dataset?.rawGrid ?? [];
 
-  const maxCols = useMemo<number>(() => {
+  const maxCols = useMemo(() => {
     let m = 0;
-    for (const r of grid) m = Math.max(m, (r?.length ?? 0) as number);
+    for (const r of grid) {
+      if (Array.isArray(r) && r.length > m) m = r.length;
+    }
     return m;
   }, [grid]);
 
-  const headers = useMemo<string[]>(() => {
-    const out: string[] = [];
-    for (let i = 0; i < maxCols; i++) out.push(excelCol(i));
-    return out;
-  }, [maxCols]);
+  const headers = useMemo(() => Array.from({ length: maxCols }, (_, i) => excelCol(i)), [maxCols]);
 
-  const hiddenSet = useMemo<Record<string, true>>(() => {
-    const set: Record<string, true> = {};
-    for (const c of hiddenCols) set[String(c)] = true;
-    return set;
-  }, [hiddenCols]);
-
-  const visibleCols = useMemo<number[]>(() => {
+  const visibleCols = useMemo(() => {
     const cols: number[] = [];
-    for (let c = 0; c < maxCols; c++) if (!hiddenSet[String(c)]) cols.push(c);
+    for (let c = 0; c < maxCols; c++) {
+      if (!hiddenSet.has(c)) cols.push(c);
+    }
     return cols;
   }, [maxCols, hiddenSet]);
 
-  const filteredRows = useMemo<unknown[][]>(() => {
+  const filteredRows = useMemo(() => {
     const safe = grid.slice(0, 20000);
     const q = normalize(query);
     const filterKeys = Object.keys(colFilters);
 
     return safe.filter((row) => {
+      if (!Array.isArray(row)) return false;
+      
       if (q) {
-        let joined = "";
-        for (let i = 0; i < row.length; i++) joined += " " + cellToText(row[i]);
-        if (!joined.toLowerCase().includes(q)) return false;
+        const joined = row.map(cellToText).join(" ").toLowerCase();
+        if (!joined.includes(q)) return false;
       }
 
       if (filterKeys.length) {
         for (const k of filterKeys) {
+          const c = Number(k);
           const f = colFilters[k];
           if (!f?.value) continue;
-          const c = Number(k);
           const cell = normalize(cellToText(row?.[c]));
           const v = normalize(f.value);
           if (f.op === "contains") {
@@ -170,17 +144,18 @@ export function SpreadsheetView({ dataset }: { dataset: Dataset | null }) {
     });
   }, [grid, query, colFilters]);
 
-  useEffect(() => setPage(1), [query, colFilters, pageSize, fullMode, hiddenCols]);
+  useEffect(() => {
+    setPage(1);
+  }, [query, colFilters, pageSize, fullMode, hiddenCols]);
 
   const totalRows = filteredRows.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const pageSafe = Math.min(page, totalPages);
 
-  const pagedRows = useMemo<unknown[][]>(() => {
+  const pagedRows = useMemo(() => {
     if (!fullMode) return filteredRows;
     const start = (pageSafe - 1) * pageSize;
-    const end = start + pageSize;
-    return filteredRows.slice(start, end);
+    return filteredRows.slice(start, start + pageSize);
   }, [filteredRows, fullMode, pageSafe, pageSize]);
 
   const ROW_HEIGHT = compact ? 28 : 36;
@@ -189,47 +164,19 @@ export function SpreadsheetView({ dataset }: { dataset: Dataset | null }) {
 
   const totalVirtualRows = pagedRows.length;
   const startIndex = !fullMode ? Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - BUFFER) : 0;
-  const endIndex = !fullMode
-    ? Math.min(totalVirtualRows, startIndex + VIEWPORT_ROWS + BUFFER * 2)
-    : totalVirtualRows;
-
+  const endIndex = !fullMode ? Math.min(totalVirtualRows, startIndex + VIEWPORT_ROWS + BUFFER * 2) : totalVirtualRows;
   const visibleRows = !fullMode ? pagedRows.slice(startIndex, endIndex) : pagedRows;
+
   const topPad = !fullMode ? startIndex * ROW_HEIGHT : 0;
   const bottomPad = !fullMode ? Math.max(0, (totalVirtualRows - endIndex) * ROW_HEIGHT) : 0;
 
-  function toggleCol(c: number) {
-    setHiddenCols((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
-  }
-
-  function openFilter(col: number, e: React.MouseEvent) {
-    const rect = (e.target as HTMLElement).getBoundingClientRect();
-    const existing = colFilters[String(col)];
-    setFilterDraftOp(existing?.op ?? "contains");
-    setFilterDraftValue(existing?.value ?? "");
-    setFilterOpen({ col, x: rect.left, y: rect.bottom + 6 });
-  }
-
-  function applyFilter() {
-    if (!filterOpen) return;
-    const col = filterOpen.col;
-    const v = filterDraftValue.trim();
-
-    setColFilters((prev) => {
-      const next: Record<string, ColFilter> = { ...prev };
-      if (!v) delete next[String(col)];
-      else next[String(col)] = { op: filterDraftOp, value: v };
-      return next;
-    });
-
-    setFilterOpen(null);
-  }
-
-  function clearFilter(col: number) {
-    setColFilters((prev) => {
-      const next: Record<string, ColFilter> = { ...prev };
-      delete next[String(col)];
-      return next;
-    });
+  function isCellSelected(r: number, c: number): boolean {
+    if (!sel.start || !sel.end) return false;
+    const r1 = Math.min(sel.start.r, sel.end.r);
+    const r2 = Math.max(sel.start.r, sel.end.r);
+    const c1 = Math.min(sel.start.c, sel.end.c);
+    const c2 = Math.max(sel.start.c, sel.end.c);
+    return r >= r1 && r <= r2 && c >= c1 && c <= c2;
   }
 
   function clearSelection() {
@@ -268,7 +215,6 @@ export function SpreadsheetView({ dataset }: { dataset: Dataset | null }) {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sel, pagedRows]);
 
   useEffect(() => {
@@ -282,146 +228,153 @@ export function SpreadsheetView({ dataset }: { dataset: Dataset | null }) {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [filterOpen]);
 
-  if (!dataset || !grid.length) {
-    return (
-      <div className="flex items-center justify-center h-full text-muted-foreground">
-        Nenhum dado para exibir
-      </div>
-    );
+  function toggleCol(c: number) {
+    setHiddenCols((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
+  }
+
+  function openFilter(col: number, e: React.MouseEvent) {
+    const rect = (e.target as HTMLElement).getBoundingClientRect();
+    setFilterDraftOp(colFilters[String(col)]?.op ?? "contains");
+    setFilterDraftValue(colFilters[String(col)]?.value ?? "");
+    setFilterOpen({ col, x: rect.left, y: rect.bottom + 6 });
+  }
+
+  function applyFilter() {
+    if (!filterOpen) return;
+    const col = filterOpen.col;
+    const v = filterDraftValue.trim();
+
+    setColFilters((prev) => {
+      const next = { ...prev };
+      if (!v) delete next[String(col)];
+      else next[String(col)] = { op: filterDraftOp, value: v };
+      return next;
+    });
+
+    setFilterOpen(null);
+  }
+
+  function clearFilter(col: number) {
+    setColFilters((prev) => {
+      const next = { ...prev };
+      delete next[String(col)];
+      return next;
+    });
+  }
+
+  if (!grid.length) {
+    return <div className="p-6 text-muted-foreground">Nenhum dado para exibir</div>;
   }
 
   const cellPad = compact ? "px-2 py-1" : "px-3 py-2";
 
-  function rowBaseClass(kind: RowKind): string {
-    if (kind === "teams") return "bg-sidebar text-sidebar-foreground";
-    if (kind === "people") return "bg-muted";
-    if (kind === "dataHeader") return "bg-secondary/15";
-    return "bg-card";
-  }
-
-  function rowStickyClass(kind: RowKind): string {
-    if (kind === "teams") return "bg-sidebar text-sidebar-foreground";
-    if (kind === "people") return "bg-muted";
-    if (kind === "dataHeader") return "bg-secondary/15";
-    return "bg-card";
-  }
-
   return (
-    <section className="h-full flex flex-col bg-card border rounded-lg overflow-hidden">
-      <div className="px-4 py-3 border-b flex items-center justify-between gap-3 shrink-0">
+    <section className="bg-card border border-border shadow-sm rounded-2xl overflow-hidden">
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3 flex-wrap">
         <div>
           <div className="font-bold text-foreground">Planilha (Power BI)</div>
           <div className="text-xs text-muted-foreground">
             {totalRows.toLocaleString("pt-BR")} linhas • {maxCols} colunas
+            {Object.keys(colFilters).length ? " • filtros" : ""}
+            {query ? " • busca" : ""}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap justify-end">
+        <div className="flex items-center gap-2 flex-wrap">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar…"
-            className="w-56 max-w-[50vw] rounded-xl border border-border bg-muted px-3 py-2 text-sm"
+            className="w-48 rounded-xl border border-border bg-muted px-3 py-2 text-sm"
           />
 
           <button
             onClick={() => setCompact((c) => !c)}
-            className="px-3 py-2 rounded-xl bg-card border border-border text-sm font-semibold hover:bg-muted"
+            className={cn(
+              "px-3 py-2 rounded-xl border text-sm font-semibold transition-colors",
+              compact ? "bg-primary text-primary-foreground" : "bg-card text-foreground hover:bg-muted"
+            )}
           >
-            {compact ? "Compacto: ON" : "Compacto: OFF"}
+            Compacto
           </button>
 
           <button
             onClick={() => setShowFields((s) => !s)}
-            className="px-3 py-2 rounded-xl bg-card border border-border text-sm font-semibold hover:bg-muted"
+            className={cn(
+              "px-3 py-2 rounded-xl border text-sm font-semibold transition-colors",
+              showFields ? "bg-primary text-primary-foreground" : "bg-card text-foreground hover:bg-muted"
+            )}
           >
-            {showFields ? "Campos: ON" : "Campos: OFF"}
+            Campos
           </button>
 
           <button
             onClick={() => setFullMode((m) => !m)}
-            className="px-3 py-2 rounded-xl bg-card border border-border text-sm font-semibold hover:bg-muted"
+            className={cn(
+              "px-3 py-2 rounded-xl border text-sm font-semibold transition-colors",
+              fullMode ? "bg-primary text-primary-foreground" : "bg-card text-foreground hover:bg-muted"
+            )}
           >
-            {fullMode ? "Planilha completa: ON" : "Planilha completa: OFF"}
+            Paginado
           </button>
 
           {sel.start && sel.end && (
-            <button
-              onClick={copySelectionTSV}
-              className="px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
-              title="Copiar seleção (Ctrl+C)"
-            >
+            <button onClick={copySelectionTSV} className="px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
               Copiar
             </button>
           )}
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="grid" style={{ gridTemplateColumns: showFields ? "240px 1fr" : "1fr" }}>
         {showFields && (
-          <aside className="w-64 border-r bg-muted/50 flex flex-col shrink-0">
-            <div className="px-3 py-3 border-b">
+          <aside className="border-r border-border bg-muted/50">
+            <div className="px-3 py-3 border-b border-border">
               <div className="text-xs font-bold text-muted-foreground">CAMPOS</div>
-              <div className="text-[11px] text-muted-foreground">Clique para ocultar/exibir</div>
             </div>
 
-            <div className="p-3 space-y-2 overflow-auto flex-1">
+            <div className="p-3 space-y-2 overflow-auto" style={{ maxHeight: "calc(100vh - 220px)" }}>
               {headers.map((h, c) => {
-                const hidden = !!hiddenSet[String(c)];
+                const hidden = hiddenSet.has(c);
                 const hasF = !!colFilters[String(c)];
                 return (
                   <button
                     key={h}
                     onClick={() => toggleCol(c)}
-                    className={
-                      "w-full text-left rounded-xl border px-3 py-2 text-sm transition " +
-                      (hidden ? "bg-card text-muted-foreground" : "bg-card text-foreground hover:bg-muted") +
-                      (hasF ? " ring-2 ring-primary/40" : "")
-                    }
+                    className={cn(
+                      "w-full text-left rounded-xl border px-3 py-2 text-sm transition",
+                      hidden ? "bg-card text-muted-foreground" : "bg-card text-foreground hover:bg-muted",
+                      hasF && "ring-2 ring-primary"
+                    )}
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-semibold">{h}</span>
-                      <span className="text-[11px] text-muted-foreground">{hidden ? "oculta" : "visível"}</span>
+                      <span className="text-xs text-muted-foreground">{hidden ? "oculta" : "visível"}</span>
                     </div>
-                    {hasF && (
-                      <div className="text-[11px] text-muted-foreground mt-1">
-                        {colFilters[String(c)].op}: “{colFilters[String(c)].value}”
-                      </div>
-                    )}
                   </button>
                 );
               })}
             </div>
 
             {fullMode && (
-              <div className="px-3 py-3 border-t bg-card">
-                <div className="text-xs font-bold text-muted-foreground mb-2">PAGINAÇÃO</div>
+              <div className="px-3 py-3 border-t border-border bg-card">
+                <div className="text-xs font-bold text-muted-foreground mb-2">PÁGINA</div>
                 <div className="flex items-center gap-2">
                   <select
                     value={pageSize}
                     onChange={(e) => setPageSize(Number(e.target.value))}
-                    className="rounded-xl border border-border bg-card px-2 py-2 text-sm"
+                    className="rounded-xl border px-2 py-2 text-sm"
                   >
                     <option value={200}>200</option>
                     <option value={500}>500</option>
                     <option value={1000}>1000</option>
                   </select>
 
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    className="px-2 py-1 border border-border rounded"
-                    disabled={pageSafe <= 1}
-                  >
+                  <button onClick={() => setPage((p) => Math.max(1, p - 1))} className="px-2 py-1 border rounded" disabled={pageSafe <= 1}>
                     ◀
                   </button>
-                  <div className="text-sm font-semibold text-foreground">
-                    {pageSafe} / {totalPages}
-                  </div>
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    className="px-2 py-1 border border-border rounded"
-                    disabled={pageSafe >= totalPages}
-                  >
+                  <span className="text-sm font-semibold">{pageSafe}/{totalPages}</span>
+                  <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className="px-2 py-1 border rounded" disabled={pageSafe >= totalPages}>
                     ▶
                   </button>
                 </div>
@@ -430,118 +383,101 @@ export function SpreadsheetView({ dataset }: { dataset: Dataset | null }) {
           </aside>
         )}
 
-        <div className="flex-1 relative overflow-hidden">
+        <div className="relative">
           <div
             ref={scrollRef}
-            className="h-full overflow-auto"
+            className="h-[calc(100vh-160px)] overflow-auto"
             onScroll={(e) => setScrollTop((e.target as HTMLDivElement).scrollTop)}
             onMouseLeave={() => setSel((s) => ({ ...s, active: false }))}
           >
             <table className="min-w-full text-sm">
-              <thead className="sticky top-0 z-20 bg-muted">
+              <thead className="sticky top-0 z-20 bg-card">
                 <tr className="border-b border-border">
-                  <th className="text-[11px] font-bold text-muted-foreground px-3 py-2 bg-muted sticky left-0 z-30 border-r border-border w-[56px]">
+                  <th className="text-xs font-bold text-muted-foreground px-3 py-2 bg-card sticky left-0 z-30 border-r border-border w-[56px]">
                     #
                   </th>
 
-                  {visibleCols.map((c) => {
-                    const isA = c === 0;
-                    return (
-                      <th
-                        key={c}
-                        className={
-                          "text-[11px] font-bold text-muted-foreground px-3 py-2 bg-muted " +
-                          (isA ? "sticky left-[56px] z-30 border-r border-border w-[160px]" : "text-left whitespace-nowrap")
-                        }
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span>{headers[c]}</span>
-                          <button
-                            className="text-[11px] px-2 py-1 rounded-lg border border-border hover:bg-card"
-                            onClick={(e) => openFilter(c, e)}
-                            title="Filtro"
-                          >
-                            ⛃
-                          </button>
-                        </div>
-                      </th>
-                    );
-                  })}
+                  {visibleCols.includes(0) && (
+                    <th className="text-xs font-bold text-muted-foreground px-3 py-2 bg-card sticky left-[56px] z-30 border-r border-border w-[160px]">
+                      <div className="flex items-center justify-between gap-2">
+                        <span>A</span>
+                        <button className="text-xs px-2 py-1 rounded-lg border hover:bg-muted" onClick={(e) => openFilter(0, e)}>
+                          ⛃
+                        </button>
+                      </div>
+                    </th>
+                  )}
+
+                  {visibleCols.filter((c) => c !== 0).map((c) => (
+                    <th key={c} className="text-xs font-bold text-muted-foreground px-3 py-2 text-left whitespace-nowrap">
+                      <div className="flex items-center justify-between gap-2">
+                        <span>{headers[c]}</span>
+                        <button className="text-xs px-2 py-1 rounded-lg border hover:bg-muted" onClick={(e) => openFilter(c, e)}>
+                          ⛃
+                        </button>
+                      </div>
+                    </th>
+                  ))}
                 </tr>
               </thead>
 
               <tbody>
                 {topPad > 0 && (
-                  <tr>
-                    <td colSpan={visibleCols.length + 1} style={{ height: topPad }} />
-                  </tr>
+                  <tr><td colSpan={visibleCols.length + 1} style={{ height: topPad }} /></tr>
                 )}
 
                 {visibleRows.map((row, i) => {
                   const realRow = (!fullMode ? startIndex : 0) + i;
-                  const absoluteRowIndex = fullMode ? (pageSafe - 1) * pageSize + realRow : realRow;
-                  const kind = rowKind(row, absoluteRowIndex);
+                  const globalRow = fullMode ? (pageSafe - 1) * pageSize + realRow : realRow;
+
+                  const kind = rowKind(row as unknown[], globalRow);
+                  const baseRow =
+                    kind === "teams"
+                      ? "bg-primary text-primary-foreground"
+                      : kind === "people"
+                      ? "bg-secondary"
+                      : kind === "dataHeader"
+                      ? "bg-accent"
+                      : "bg-card";
 
                   return (
-                    <tr
-                      key={absoluteRowIndex}
-                      className={"border-b border-border " + rowBaseClass(kind)}
-                      style={{ height: ROW_HEIGHT }}
-                    >
-                      <td
-                        className={
-                          "text-[11px] sticky left-0 z-10 border-r border-border w-[56px] " +
-                          cellPad +
-                          " " +
-                          rowStickyClass(kind)
-                        }
-                      >
-                        {absoluteRowIndex + 1}
+                    <tr key={realRow} className={cn("border-b border-border", baseRow)} style={{ height: ROW_HEIGHT }}>
+                      <td className={cn("text-xs sticky left-0 z-10 border-r border-border w-[56px]", cellPad,
+                        kind === "teams" ? "bg-primary text-primary-foreground" :
+                        kind === "people" ? "bg-secondary" :
+                        kind === "dataHeader" ? "bg-accent" : "bg-card"
+                      )}>
+                        {globalRow + 1}
                       </td>
 
                       {visibleCols.map((c) => {
-                        const txt = cellToText(row?.[c]);
+                        const arr = row as unknown[];
+                        const txt = cellToText(arr?.[c]);
                         const chip = detectChip(txt);
-                        const isA = c === 0;
-                        const stickyA = isA
-                          ? "sticky left-[56px] z-10 border-r border-border w-[160px] " + rowStickyClass(kind)
+
+                        const stickyA = c === 0
+                          ? cn("sticky left-[56px] z-10 border-r border-border w-[160px]",
+                              kind === "teams" ? "bg-primary text-primary-foreground" :
+                              kind === "people" ? "bg-secondary" :
+                              kind === "dataHeader" ? "bg-accent" : "bg-card")
                           : "";
 
-                        const selected = isCellSelected(sel, realRow, c);
+                        const selected = isCellSelected(realRow, c);
 
                         return (
                           <td
                             key={c}
-                            className={
-                              cellPad +
-                              " whitespace-nowrap " +
-                              stickyA +
-                              (selected ? " outline outline-2 outline-primary outline-offset-[-2px]" : "")
-                            }
-                            onMouseDown={(e) => {
-                              if (e.button !== 0) return;
-                              setSel({ active: true, start: { r: realRow, c }, end: { r: realRow, c } });
-                            }}
-                            onMouseEnter={() => {
-                              if (!sel.active || !sel.start) return;
-                              setSel((s) => ({ ...s, end: { r: realRow, c } }));
-                            }}
+                            className={cn(cellPad, "whitespace-nowrap", stickyA, selected && "outline outline-2 outline-primary outline-offset-[-2px]")}
+                            onMouseDown={(e) => e.button === 0 && setSel({ active: true, start: { r: realRow, c }, end: { r: realRow, c } })}
+                            onMouseEnter={() => sel.active && sel.start && setSel((s) => ({ ...s, end: { r: realRow, c } }))}
                             onMouseUp={() => setSel((s) => ({ ...s, active: false }))}
-                            title={txt}
                           >
                             {chip ? (
-                              <span
-                                className={
-                                  "inline-flex items-center justify-center border rounded-full px-2 py-0.5 text-[11px] font-bold " +
-                                  chipClass(chip)
-                                }
-                              >
+                              <span className={cn("inline-flex items-center justify-center border rounded-full px-2 py-1 text-xs font-bold", chipClass(chip))}>
                                 {chip}
                               </span>
-                            ) : isA ? (
-                              <span className="font-semibold truncate block max-w-[150px]">{txt}</span>
                             ) : (
-                              txt
+                              <span className={c === 0 ? "font-semibold truncate block max-w-[150px]" : ""}>{txt}</span>
                             )}
                           </td>
                         );
@@ -551,9 +487,7 @@ export function SpreadsheetView({ dataset }: { dataset: Dataset | null }) {
                 })}
 
                 {bottomPad > 0 && (
-                  <tr>
-                    <td colSpan={visibleCols.length + 1} style={{ height: bottomPad }} />
-                  </tr>
+                  <tr><td colSpan={visibleCols.length + 1} style={{ height: bottomPad }} /></tr>
                 )}
               </tbody>
             </table>
@@ -562,66 +496,50 @@ export function SpreadsheetView({ dataset }: { dataset: Dataset | null }) {
           {filterOpen && (
             <div
               data-filter-popover
-              className="fixed z-[9999] bg-popover text-popover-foreground border border-border shadow-lg rounded-2xl p-3 w-[280px]"
+              className="fixed z-50 bg-card border border-border shadow-lg rounded-2xl p-3 w-[260px]"
               style={{ left: filterOpen.x, top: filterOpen.y }}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-3">
                 <div className="font-bold text-sm">Filtro: {headers[filterOpen.col]}</div>
                 <button className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setFilterOpen(null)}>
                   ✕
                 </button>
               </div>
 
-              <div className="mt-3 space-y-2">
-                <label className="text-xs font-semibold text-muted-foreground">Operação</label>
-                <select
-                  value={filterDraftOp}
-                  onChange={(e) => setFilterDraftOp(e.target.value as FilterOp)}
-                  className="w-full rounded-xl border border-border bg-card px-2 py-2 text-sm"
-                >
-                  <option value="contains">Contém</option>
-                  <option value="equals">Igual</option>
-                </select>
+              <select
+                value={filterDraftOp}
+                onChange={(e) => setFilterDraftOp(e.target.value as FilterOp)}
+                className="w-full rounded-xl border px-2 py-2 text-sm mb-2"
+              >
+                <option value="contains">Contém</option>
+                <option value="equals">Igual</option>
+              </select>
 
-                <label className="text-xs font-semibold text-muted-foreground">Valor</label>
-                <input
-                  value={filterDraftValue}
-                  onChange={(e) => setFilterDraftValue(e.target.value)}
-                  className="w-full rounded-xl border border-border bg-card px-2 py-2 text-sm"
-                  placeholder="ex: ENT"
-                />
+              <input
+                value={filterDraftValue}
+                onChange={(e) => setFilterDraftValue(e.target.value)}
+                className="w-full rounded-xl border px-2 py-2 text-sm mb-2"
+                placeholder="Valor..."
+              />
 
-                <div className="flex items-center gap-2 mt-2">
-                  <button
-                    onClick={applyFilter}
-                    className="flex-1 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
-                  >
-                    Aplicar
-                  </button>
-                  <button
-                    onClick={() => clearFilter(filterOpen.col)}
-                    className="px-3 py-2 rounded-xl border border-border text-sm font-semibold hover:bg-muted"
-                    title="Limpar filtro da coluna"
-                  >
-                    Limpar
-                  </button>
-                </div>
-
-                <div className="text-[11px] text-muted-foreground">
-                  Esc fecha • Ctrl+C copia seleção
-                </div>
+              <div className="flex items-center gap-2">
+                <button onClick={applyFilter} className="flex-1 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
+                  Aplicar
+                </button>
+                <button onClick={() => clearFilter(filterOpen.col)} className="px-3 py-2 rounded-xl border text-sm">
+                  Limpar
+                </button>
               </div>
             </div>
           )}
         </div>
       </div>
 
-      <div className="px-4 py-3 border-t text-xs text-muted-foreground flex flex-wrap gap-3 shrink-0">
+      <div className="px-4 py-3 border-t border-border text-xs text-muted-foreground flex flex-wrap gap-3">
         <span>📚 Campos</span>
         <span>⛃ Filtros</span>
-        <span>🖱️ Seleção</span>
-        <span>⌘/Ctrl+C</span>
-        <span>📄 Paginação</span>
+        <span>🖱️ Selecionar</span>
+        <span>Ctrl+C copiar</span>
       </div>
     </section>
   );
