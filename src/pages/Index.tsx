@@ -12,6 +12,7 @@ import type { DateRange } from "@/lib/dateRange";
 import type { GenericRow } from "@/lib/database";
 
 const STATUS_PATTERN = /^(ENT|FOL|BAN|FAL|ATE|FER|ENTREGUE?|FOLGA?|FALTA?|ATESTADO?|FER[IÉ]AS?|BANCO( DE HORAS)?|VAZIO|-)$/i;
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}|^\d{2}\/\d{2}\/\d{4}/;
 
 function isStatusLike(v: unknown): boolean {
   const s = String(v ?? "").trim();
@@ -19,7 +20,14 @@ function isStatusLike(v: unknown): boolean {
   return STATUS_PATTERN.test(s);
 }
 
-// Detecta a coluna que contém nomes de pessoas (maior diversidade de valores não-status)
+function isDateLike(v: unknown): boolean {
+  const s = String(v ?? "").trim();
+  if (!s) return false;
+  return DATE_PATTERN.test(s);
+}
+
+// Detecta a coluna que contém nomes de pessoas
+// Prioriza colunas com: muitos valores únicos, sem datas, sem status
 function findBestPersonColumn(categoryColumns: string[], domainRows: GenericRow[]): string {
   const cols = categoryColumns.filter(Boolean);
   if (cols.length === 0) return "";
@@ -27,21 +35,46 @@ function findBestPersonColumn(categoryColumns: string[], domainRows: GenericRow[
   let bestCol = cols[0];
   let bestScore = -1;
 
-  // Amostra para performance
-  const sample = domainRows.slice(0, 8000);
+  const sample = domainRows.slice(0, 5000);
 
   for (const colName of cols) {
     const unique = new Set<string>();
+    let dateCount = 0;
+    let statusCount = 0;
+    let total = 0;
+
     for (const r of sample) {
       const raw = r[colName];
-      if (isStatusLike(raw)) continue;
-      const s = String(raw).trim();
-      if (s) unique.add(s);
-      if (unique.size > 300) break; // suficiente pra decidir
+      const s = String(raw ?? "").trim();
+      if (!s) continue;
+      
+      total += 1;
+      
+      // Se for data, pula essa coluna
+      if (isDateLike(s)) {
+        dateCount += 1;
+        continue;
+      }
+      
+      // Se for status, também marca
+      if (isStatusLike(s)) {
+        statusCount += 1;
+        continue;
+      }
+      
+      unique.add(s);
     }
 
-    if (unique.size > bestScore) {
-      bestScore = unique.size;
+    // Colunas com muitas datas não são de pessoas
+    if (total > 0 && dateCount / total > 0.3) continue;
+    
+    // Colunas com muitos status não são de pessoas
+    if (total > 0 && statusCount / total > 0.5) continue;
+
+    // Score = quantidade de valores únicos não-status/data
+    const score = unique.size;
+    if (score > bestScore) {
+      bestScore = score;
       bestCol = colName;
     }
   }
@@ -54,7 +87,7 @@ function findStatusColumn(categoryColumns: string[], domainRows: GenericRow[]): 
   const cols = categoryColumns.filter(Boolean);
   if (cols.length === 0) return null;
 
-  const sample = domainRows.slice(0, 8000);
+  const sample = domainRows.slice(0, 5000);
 
   let bestCol: string | null = null;
   let bestRatio = 0;
@@ -67,6 +100,10 @@ function findStatusColumn(categoryColumns: string[], domainRows: GenericRow[]): 
       const raw = r[colName];
       const s = String(raw ?? "").trim();
       if (!s) continue;
+      
+      // Ignora colunas que parecem datas
+      if (isDateLike(s)) continue;
+      
       total += 1;
       if (isStatusLike(s)) statusLike += 1;
     }
@@ -74,7 +111,6 @@ function findStatusColumn(categoryColumns: string[], domainRows: GenericRow[]): 
     if (total === 0) continue;
     const ratio = statusLike / total;
 
-    // coluna de status normalmente tem poucos valores únicos e ratio alto
     if (ratio > bestRatio) {
       bestRatio = ratio;
       bestCol = colName;
@@ -82,6 +118,35 @@ function findStatusColumn(categoryColumns: string[], domainRows: GenericRow[]): 
   }
 
   return bestRatio >= 0.25 ? bestCol : null;
+}
+
+// Detecta a melhor coluna de data
+function findDateColumn(categoryColumns: string[], domainRows: GenericRow[], detectedDateColumn?: string): string {
+  if (detectedDateColumn) return detectedDateColumn;
+  
+  const cols = categoryColumns.filter(Boolean);
+  if (cols.length === 0) return "";
+
+  const sample = domainRows.slice(0, 1000);
+
+  for (const colName of cols) {
+    let dateCount = 0;
+    let total = 0;
+
+    for (const r of sample) {
+      const raw = r[colName];
+      const s = String(raw ?? "").trim();
+      if (!s) continue;
+      total += 1;
+      if (isDateLike(s)) dateCount += 1;
+    }
+
+    if (total > 0 && dateCount / total > 0.5) {
+      return colName;
+    }
+  }
+
+  return cols[0];
 }
 
 export default function Index() {
@@ -274,7 +339,7 @@ export default function Index() {
             rows={filteredRows}
             domainRows={activeDataset.rows}
             rowColumn={findBestPersonColumn(matrixCandidateColumns, activeDataset.rows)}
-            colColumn={activeDataset.detectedDateColumn || matrixCandidateColumns[0]}
+            colColumn={findDateColumn(matrixCandidateColumns, activeDataset.rows, activeDataset.detectedDateColumn)}
             valueColumn={findStatusColumn(matrixCandidateColumns, activeDataset.rows) || matrixCandidateColumns[0]}
             availableColumns={activeDataset.columns?.map(c => typeof c === 'string' ? c : c.name) || []}
           />
