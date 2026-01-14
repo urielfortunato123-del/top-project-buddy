@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import type { Dataset } from "@/lib/database";
 import type { DateRange } from "@/pages/Index";
 import { cn } from "@/lib/utils";
@@ -11,110 +11,267 @@ interface SpreadsheetViewProps {
   dateRange: DateRange;
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  ENTREGUE: "bg-primary/20 text-primary",
-  FOLGA: "bg-secondary/20 text-secondary",
-  "BANCO DE HORAS": "bg-accent/20 text-accent",
-  FALTA: "bg-destructive/20 text-destructive",
-  ATESTADO: "bg-purple-500/20 text-purple-600",
-  FÉRIAS: "bg-blue-500/20 text-blue-600",
-  VAZIO: "bg-muted text-muted-foreground",
-};
+type Chip = "ENT" | "FOL" | "BAN" | "FAL" | "ATE" | "FER" | "-" | "";
+
+function cellToText(v: any) {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
+
+function excelCol(i: number) {
+  let n = i + 1;
+  let s = "";
+  while (n > 0) {
+    const r = (n - 1) % 26;
+    s = String.fromCharCode(65 + r) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
+function detectChip(value: string): Chip {
+  const v = value.trim().toUpperCase();
+  if (!v) return "";
+  if (v === "-" || v === "0") return "-";
+  if (v.includes("ENT")) return "ENT";
+  if (v.includes("FOL")) return "FOL";
+  if (v.includes("BAN")) return "BAN";
+  if (v.includes("FAL")) return "FAL";
+  if (v.includes("ATE")) return "ATE";
+  if (v.includes("FÉR") || v.includes("FER")) return "FER";
+  return "";
+}
+
+function chipClass(chip: Chip) {
+  if (chip === "ENT") return "bg-emerald-100 text-emerald-700 border-emerald-200";
+  if (chip === "FOL") return "bg-blue-100 text-blue-700 border-blue-200";
+  if (chip === "BAN") return "bg-amber-100 text-amber-800 border-amber-200";
+  if (chip === "FAL") return "bg-red-100 text-red-700 border-red-200";
+  if (chip === "ATE") return "bg-violet-100 text-violet-700 border-violet-200";
+  if (chip === "FER") return "bg-sky-100 text-sky-700 border-sky-200";
+  if (chip === "-") return "bg-muted text-muted-foreground border-border";
+  return "";
+}
+
+function rowKind(row: any[], rowIndex: number) {
+  if (rowIndex === 1) return "teams";
+  if (rowIndex === 2) return "people";
+  const a = cellToText(row?.[0]).trim().toUpperCase();
+  if (a === "DATA") return "dataHeader";
+  return "normal";
+}
 
 export function SpreadsheetView({ dataset, personFilter, statusFilter, teamFilter, dateRange }: SpreadsheetViewProps) {
-  const { filteredRows, dates, people } = useMemo(() => {
-    let filtered = dataset.rows;
-    
-    // Date range filter
-    if (dateRange.from) {
-      const fromStr = dateRange.from.toISOString().slice(0, 10);
-      filtered = filtered.filter((r) => r.date >= fromStr);
-    }
-    if (dateRange.to) {
-      const toStr = dateRange.to.toISOString().slice(0, 10);
-      filtered = filtered.filter((r) => r.date <= toStr);
-    }
-    
-    if (teamFilter !== "ALL") {
-      filtered = filtered.filter((r) => r.team === teamFilter);
-    }
-    if (personFilter !== "ALL") {
-      filtered = filtered.filter((r) => r.person === personFilter);
-    }
-    if (statusFilter !== "ALL") {
-      filtered = filtered.filter((r) => r.status === statusFilter);
-    }
+  const [query, setQuery] = useState("");
+  const [compact, setCompact] = useState(true);
 
-    const datesSet = new Set(filtered.map((r) => r.date));
-    const peopleSet = new Set(filtered.map((r) => r.person));
+  const ROW_HEIGHT = compact ? 28 : 36;
+  const VIEWPORT_ROWS = 120;
+  const BUFFER = 20;
 
-    const dates = Array.from(datesSet).sort();
-    const people = Array.from(peopleSet).sort();
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
 
-    return { filteredRows: filtered, dates, people };
-  }, [dataset.rows, personFilter, statusFilter, teamFilter, dateRange]);
+  const grid = dataset?.rawGrid ?? [];
 
-  const getStatus = (person: string, date: string) => {
-    const row = filteredRows.find((r) => r.person === person && r.date === date);
-    return row?.status || "VAZIO";
-  };
+  const prepared = useMemo(() => {
+    const safe = grid.slice(0, 20000);
+    const maxCols = Math.max(...safe.map((r) => (r?.length ?? 0)), 0);
+    const headers = Array.from({ length: maxCols }, (_, i) => excelCol(i));
 
-  const formatDate = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-  };
+    const q = query.trim().toLowerCase();
+    const filtered = q
+      ? safe.filter((row) => {
+          const joined = row.map(cellToText).join(" ").toLowerCase();
+          return joined.includes(q);
+        })
+      : safe;
 
-  if (dates.length === 0 || people.length === 0) {
+    return { rows: filtered, maxCols, headers };
+  }, [grid, query]);
+
+  const totalRows = prepared.rows.length;
+
+  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - BUFFER);
+  const endIndex = Math.min(totalRows, startIndex + VIEWPORT_ROWS + BUFFER * 2);
+
+  const visible = prepared.rows.slice(startIndex, endIndex);
+
+  const topPad = startIndex * ROW_HEIGHT;
+  const bottomPad = Math.max(0, (totalRows - endIndex) * ROW_HEIGHT);
+
+  const colHeaders = prepared.headers;
+
+  if (!grid.length) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground">
-        Nenhum dado para exibir com os filtros selecionados
+        Nenhum dado para exibir
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-auto">
-      <table className="min-w-full border-collapse text-xs">
-        <thead className="sticky top-0 z-10">
-          <tr className="bg-muted">
-            <th className="sticky left-0 z-20 bg-muted px-3 py-2 text-left font-bold border-b border-r border-border">
-              Pessoa
-            </th>
-            {dates.map((date) => (
-              <th
-                key={date}
-                className="px-2 py-2 text-center font-semibold border-b border-border whitespace-nowrap"
+    <section className="h-full flex flex-col bg-card border rounded-lg overflow-hidden">
+      <div className="px-4 py-3 border-b flex items-center justify-between gap-3 shrink-0">
+        <div>
+          <div className="font-bold text-foreground">Planilha (Power BI)</div>
+          <div className="text-xs text-muted-foreground">
+            {totalRows.toLocaleString("pt-BR")} linhas • {prepared.maxCols} colunas
+            {query ? " • filtrado" : ""}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar… (qualquer coluna)"
+              className="w-72 max-w-[50vw] rounded-xl border border-border bg-muted px-3 py-2 text-sm"
+            />
+            {query && (
+              <button
+                onClick={() => setQuery("")}
+                className="absolute right-2 top-2 text-xs text-muted-foreground hover:text-foreground"
+                aria-label="limpar"
               >
-                {formatDate(date)}
+                ✕
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={() => setCompact((c) => !c)}
+            className={cn(
+              "px-3 py-2 rounded-xl border text-sm font-semibold transition-colors",
+              compact 
+                ? "bg-primary text-primary-foreground" 
+                : "bg-card text-foreground hover:bg-muted"
+            )}
+          >
+            {compact ? "Compacto: ON" : "Compacto: OFF"}
+          </button>
+        </div>
+      </div>
+
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-auto"
+        onScroll={(e) => setScrollTop((e.target as HTMLDivElement).scrollTop)}
+      >
+        <table className="min-w-full text-sm">
+          <thead className="sticky top-0 z-20 bg-muted">
+            <tr className="border-b border-border">
+              <th className="text-[11px] font-bold text-muted-foreground px-3 py-2 bg-muted sticky left-0 z-30 border-r border-border w-[56px]">
+                #
               </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {people.map((person, idx) => (
-            <tr key={person} className={idx % 2 === 0 ? "bg-card" : "bg-muted/30"}>
-              <td className="sticky left-0 z-10 bg-inherit px-3 py-2 font-medium border-r border-border whitespace-nowrap">
-                {person}
-              </td>
-              {dates.map((date) => {
-                const status = getStatus(person, date);
-                return (
-                  <td key={date} className="px-1 py-1 text-center border-b border-border">
-                    <span
-                      className={cn(
-                        "inline-block px-2 py-1 rounded text-[10px] font-semibold",
-                        STATUS_COLORS[status] || "bg-muted text-muted-foreground"
-                      )}
-                    >
-                      {status === "VAZIO" ? "-" : status.slice(0, 3)}
-                    </span>
-                  </td>
-                );
-              })}
+              <th className="text-[11px] font-bold text-muted-foreground px-3 py-2 bg-muted sticky left-[56px] z-30 border-r border-border w-[160px]">
+                A
+              </th>
+              {colHeaders.slice(1).map((h) => (
+                <th
+                  key={h}
+                  className="text-[11px] font-bold text-muted-foreground px-3 py-2 text-left whitespace-nowrap"
+                >
+                  {h}
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+
+          <tbody>
+            {topPad > 0 && (
+              <tr>
+                <td colSpan={prepared.maxCols + 1} style={{ height: topPad }} />
+              </tr>
+            )}
+
+            {visible.map((row, i) => {
+              const realRowIndex = startIndex + i;
+              const kind = rowKind(row, realRowIndex);
+
+              const baseRow =
+                kind === "teams"
+                  ? "bg-primary text-primary-foreground"
+                  : kind === "people"
+                  ? "bg-secondary"
+                  : kind === "dataHeader"
+                  ? "bg-accent"
+                  : "bg-card";
+
+              const cellPad = compact ? "px-2 py-1" : "px-3 py-2";
+              const aVal = cellToText(row?.[0]);
+
+              return (
+                <tr key={realRowIndex} className={cn("border-b border-border", baseRow)} style={{ height: ROW_HEIGHT }}>
+                  <td
+                    className={cn(
+                      "text-[11px] sticky left-0 z-10 border-r border-border w-[56px]",
+                      cellPad,
+                      kind === "teams" ? "bg-primary text-primary-foreground" : 
+                      kind === "people" ? "bg-secondary" : 
+                      kind === "dataHeader" ? "bg-accent" : "bg-card"
+                    )}
+                  >
+                    {realRowIndex + 1}
+                  </td>
+
+                  <td
+                    className={cn(
+                      "text-[12px] font-semibold sticky left-[56px] z-10 border-r border-border w-[160px]",
+                      cellPad,
+                      kind === "teams" ? "bg-primary text-primary-foreground" : 
+                      kind === "people" ? "bg-secondary" : 
+                      kind === "dataHeader" ? "bg-accent" : "bg-card"
+                    )}
+                    title={aVal}
+                  >
+                    <div className="truncate">{aVal}</div>
+                  </td>
+
+                  {Array.from({ length: prepared.maxCols - 1 }).map((_, cIdx) => {
+                    const v = cellToText(row?.[cIdx + 1]);
+                    const chip = detectChip(v);
+
+                    if (chip) {
+                      return (
+                        <td key={cIdx} className={cn(cellPad, "whitespace-nowrap")}>
+                          <span className={cn(
+                            "inline-flex items-center justify-center border rounded-full px-2 py-0.5 text-[11px] font-bold",
+                            chipClass(chip)
+                          )}>
+                            {chip}
+                          </span>
+                        </td>
+                      );
+                    }
+
+                    return (
+                      <td key={cIdx} className={cn(cellPad, "whitespace-nowrap")}>
+                        {v}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+
+            {bottomPad > 0 && (
+              <tr>
+                <td colSpan={prepared.maxCols + 1} style={{ height: bottomPad }} />
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="px-4 py-3 border-t border-border text-xs text-muted-foreground flex flex-wrap gap-3 shrink-0">
+        <span>🎛️ Busca instantânea</span>
+        <span>🧊 Header/colunas fixas</span>
+        <span>⚡ Virtualização (não trava)</span>
+        <span>🎨 Status colorido</span>
+      </div>
+    </section>
   );
 }
