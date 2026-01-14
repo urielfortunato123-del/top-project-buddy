@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef } from "react";
 import { 
-  CheckCircle, AlertCircle, Coffee, Clock, Users, TrendingUp, 
-  FileDown, Loader2, FileSpreadsheet, Calendar, Target, Award 
+  CheckCircle, AlertCircle, Coffee, Clock, Users, 
+  FileDown, Loader2, Target, Award 
 } from "lucide-react";
 import type { Dataset } from "@/lib/database";
 import type { DateRange } from "@/lib/dateRange";
@@ -9,8 +9,6 @@ import { KPICard } from "./KPICard";
 import { KPIDetailModal, type KPIType } from "./KPIDetailModal";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
-import { exportDashboardToPDF } from "@/lib/pdfExport";
-import { exportToExcel } from "@/lib/excelExport";
 import { exportInteractiveZIP } from "@/lib/reportExport";
 import {
   ChartCard,
@@ -128,50 +126,24 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     setModalOpen(true);
   };
 
-  const handleExportPDF = async () => {
-    if (!dashboardRef.current) return;
-    
+  const handleExportHTML = async () => {
     setExporting(true);
-    toast({ title: "Gerando PDF...", description: "Aguarde enquanto capturamos o dashboard" });
+    toast({ title: "Gerando relatório...", description: "Aguarde enquanto criamos o HTML interativo" });
 
     try {
-      await exportDashboardToPDF({
-        element: dashboardRef.current,
-        datasetName: dataset.name,
-        filters: {
-          team: teamFilter,
-          person: personFilter,
-          status: statusFilter,
-          dateFrom: dateRange.from,
-          dateTo: dateRange.to,
-        },
+      await exportInteractiveZIP(dataset, {
+        team: teamFilter,
+        person: personFilter,
+        status: statusFilter,
+        dateFrom: dateRange.from,
+        dateTo: dateRange.to,
       });
-      toast({ title: "PDF exportado com sucesso!" });
+      toast({ title: "Relatório exportado com sucesso!" });
     } catch (error) {
-      console.error("Error exporting PDF:", error);
-      toast({ title: "Erro ao exportar PDF", variant: "destructive" });
+      console.error("Error exporting HTML:", error);
+      toast({ title: "Erro ao exportar relatório", variant: "destructive" });
     } finally {
       setExporting(false);
-    }
-  };
-
-  const handleExportExcel = async () => {
-    try {
-      toast({ title: "Gerando Excel...", description: "Aguarde enquanto processamos os dados" });
-      await exportToExcel({
-        dataset,
-        filters: {
-          team: teamFilter,
-          person: personFilter,
-          status: statusFilter,
-          dateFrom: dateRange.from,
-          dateTo: dateRange.to,
-        },
-      });
-      toast({ title: "Excel exportado com sucesso!" });
-    } catch (error) {
-      console.error("Error exporting Excel:", error);
-      toast({ title: "Erro ao exportar Excel", variant: "destructive" });
     }
   };
 
@@ -218,21 +190,12 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           <Button
             variant="outline"
             size="sm"
-            onClick={handleExportExcel}
-            className="gap-2 font-semibold"
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span className="hidden sm:inline">Excel</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportPDF}
+            onClick={handleExportHTML}
             disabled={exporting}
             className="gap-2 font-semibold"
           >
             {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-            <span className="hidden sm:inline">PDF</span>
+            <span className="hidden sm:inline">Exportar Relatório</span>
           </Button>
         </div>
       </div>
