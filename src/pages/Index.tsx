@@ -5,6 +5,7 @@ import { DashboardView } from "@/components/dashboard/DashboardView";
 import { MatrixTable } from "@/components/dashboard/MatrixTable";
 import { SpreadsheetView } from "@/components/dashboard/SpreadsheetView";
 import { ViewTabs } from "@/components/dashboard/ViewTabs";
+import { DatasetSelect } from "@/components/dashboard/DatasetSelect";
 import { useDatasets } from "@/hooks/useDatasets";
 import { Button } from "@/components/ui/button";
 import type { DateRange } from "@/lib/dateRange";
@@ -150,21 +151,21 @@ export default function Index() {
         ) : (
           <>
             {/* Header */}
-            <header className="h-14 border-b bg-white flex items-center justify-between px-4 shrink-0 shadow-sm">
-              <div className="flex items-center gap-4">
-                <h2 className="font-bold text-lg tracking-tight text-gray-800">
-                  {activeDataset.name}
-                </h2>
-                <span className="text-xs font-semibold text-white bg-primary px-3 py-1 rounded-full">
+            <header className="h-14 border-b bg-card flex items-center justify-between px-4 shrink-0 shadow-sm">
+              <div className="flex items-center gap-3 min-w-0">
+                <DatasetSelect datasets={safeDatasets} valueId={activeDataset.id} onChange={selectDataset} />
+
+                <span className="text-xs font-semibold bg-primary text-primary-foreground px-3 py-1 rounded-full shrink-0">
                   {filteredRows?.length ?? 0} registros
                 </span>
+
                 {hasActiveFilters && (
                   <Button variant="ghost" size="sm" onClick={clearFilters} className="text-xs h-7">
                     Limpar Filtros
                   </Button>
                 )}
               </div>
-              
+
               {/* Tab Switcher */}
               <ViewTabs value={activeTab} onChange={setActiveTab} />
             </header>
