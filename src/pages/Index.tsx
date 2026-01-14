@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Download } from "lucide-react";
+import { Download, Edit3 } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { DashboardView } from "@/components/dashboard/DashboardView";
 import { MatrixTable } from "@/components/dashboard/MatrixTable";
@@ -164,6 +164,17 @@ export default function Index() {
                     Limpar Filtros
                   </Button>
                 )}
+
+                {/* Botão Editar - abre a planilha em modo edição */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 font-semibold"
+                  onClick={() => setActiveTab("planilha")}
+                >
+                  <Edit3 className="w-4 h-4" />
+                  Editar
+                </Button>
               </div>
 
               {/* Tab Switcher */}
