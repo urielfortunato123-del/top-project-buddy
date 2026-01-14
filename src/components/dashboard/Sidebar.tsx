@@ -1,18 +1,21 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { LayoutDashboard, FileSpreadsheet, Upload, Database, Settings, Trash2, CalendarIcon, X } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Dataset } from "@/lib/database";
 import type { DateRange } from "@/lib/dateRange";
+import type { ImportFormat } from "@/lib/excelParser";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ImportFormatDialog } from "./ImportFormatDialog";
+
 interface SidebarProps {
   datasets: Dataset[];
   currentDataset: Dataset | null;
-  onImport: (file: File) => void;
+  onImport: (file: File, format?: ImportFormat) => void;
   onSelectDataset: (id: string) => void;
   onDeleteDataset: (id: string) => void;
   personFilter: string;
@@ -49,13 +52,29 @@ export function Sidebar({
   teamList,
 }: SidebarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [formatDialogOpen, setFormatDialogOpen] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      onImport(file);
+      setPendingFile(file);
+      setFormatDialogOpen(true);
       e.target.value = "";
     }
+  };
+
+  const handleFormatConfirm = (selectedFormat: ImportFormat) => {
+    if (pendingFile) {
+      onImport(pendingFile, selectedFormat);
+      setPendingFile(null);
+    }
+    setFormatDialogOpen(false);
+  };
+
+  const handleFormatCancel = () => {
+    setPendingFile(null);
+    setFormatDialogOpen(false);
   };
 
   const clearDateRange = () => {
@@ -259,6 +278,15 @@ export function Sidebar({
           Desenvolvido por <span className="font-medium text-primary/80">Uriel da Fonseca Fortunato</span>
         </p>
       </div>
+
+      {/* Import Format Dialog */}
+      <ImportFormatDialog
+        open={formatDialogOpen}
+        onOpenChange={setFormatDialogOpen}
+        fileName={pendingFile?.name || ""}
+        onConfirm={handleFormatConfirm}
+        onCancel={handleFormatCancel}
+      />
     </aside>
   );
 }
