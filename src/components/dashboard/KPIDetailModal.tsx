@@ -1,7 +1,8 @@
 import React from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { X } from "lucide-react";
+import { Download, FileSpreadsheet, FileText } from "lucide-react";
+import * as XLSX from "xlsx";
 import type { DatasetRow } from "@/lib/database";
 import {
   Dialog,
@@ -10,6 +11,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { toast } from "@/hooks/use-toast";
 
 export type KPIType = "taxa" | "entregue" | "pendencias" | "folgas" | "banco" | "pessoas";
 
@@ -38,6 +41,15 @@ const titles: Record<KPIType, string> = {
   pessoas: "Colaboradores",
 };
 
+const fileNames: Record<KPIType, string> = {
+  taxa: "taxa_entrega",
+  entregue: "registros_entregues",
+  pendencias: "pendencias",
+  folgas: "folgas",
+  banco: "banco_horas",
+  pessoas: "colaboradores",
+};
+
 function getFilteredData(type: KPIType, data: DatasetRow[]): DatasetRow[] {
   switch (type) {
     case "entregue":
@@ -59,6 +71,18 @@ function formatDate(iso: string) {
   } catch {
     return iso;
   }
+}
+
+function downloadFile(content: string, fileName: string, mimeType: string) {
+  const blob = new Blob(["\uFEFF" + content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 export function KPIDetailModal({ open, onOpenChange, type, data, kpis }: KPIDetailModalProps) {
@@ -90,11 +114,92 @@ export function KPIDetailModal({ open, onOpenChange, type, data, kpis }: KPIDeta
     return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
   }, [data, type]);
 
+  const getExportData = () => {
+    if (type === "taxa") {
+      return taxaByDate.map(item => ({
+        Data: formatDate(item.date),
+        Entregues: item.entregue,
+        Total: item.total,
+        "Taxa (%)": item.total > 0 ? Math.round((item.entregue / item.total) * 100) : 0
+      }));
+    }
+    if (type === "pessoas") {
+      return peopleStats.map((item, idx) => ({
+        Ranking: idx + 1,
+        Pessoa: item.person,
+        Equipe: item.team,
+        Entregues: item.entregue,
+        Total: item.total,
+        "Taxa (%)": item.total > 0 ? Math.round((item.entregue / item.total) * 100) : 0
+      }));
+    }
+    return filteredData.map(row => ({
+      Data: formatDate(row.date),
+      Pessoa: row.person,
+      Equipe: row.team || "GERAL",
+      Status: row.status === "VAZIO" ? "Sem info" : row.status
+    }));
+  };
+
+  const exportToCSV = () => {
+    const exportData = getExportData();
+    if (exportData.length === 0) {
+      toast({ title: "Sem dados para exportar", variant: "destructive" });
+      return;
+    }
+
+    const headers = Object.keys(exportData[0]);
+    const csvRows = [
+      headers.join(";"),
+      ...exportData.map(row => headers.map(h => (row as any)[h]).join(";"))
+    ];
+    const csvContent = csvRows.join("\n");
+    
+    downloadFile(csvContent, `${fileNames[type]}_${format(new Date(), "yyyy-MM-dd")}.csv`, "text/csv;charset=utf-8");
+    toast({ title: "CSV exportado com sucesso!" });
+  };
+
+  const exportToExcel = () => {
+    const exportData = getExportData();
+    if (exportData.length === 0) {
+      toast({ title: "Sem dados para exportar", variant: "destructive" });
+      return;
+    }
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, titles[type].slice(0, 31));
+    XLSX.writeFile(wb, `${fileNames[type]}_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+    toast({ title: "Excel exportado com sucesso!" });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh]">
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold">{titles[type]}</DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-lg font-bold">{titles[type]}</DialogTitle>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportToCSV}
+                className="gap-2"
+              >
+                <FileText className="w-4 h-4" />
+                CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportToExcel}
+                className="gap-2"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                Excel
+              </Button>
+            </div>
+          </div>
         </DialogHeader>
 
         <ScrollArea className="h-[60vh] pr-4">
@@ -213,7 +318,7 @@ export function KPIDetailModal({ open, onOpenChange, type, data, kpis }: KPIDeta
                 </table>
                 {filteredData.length > 100 && (
                   <div className="p-3 text-center text-sm text-muted-foreground bg-muted/50">
-                    Mostrando 100 de {filteredData.length} registros
+                    Mostrando 100 de {filteredData.length} registros (export inclui todos)
                   </div>
                 )}
               </div>
