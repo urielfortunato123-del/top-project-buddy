@@ -130,10 +130,145 @@ function parseCSV(text: string): any[][] {
   return lines.map(l => l.split(separator).map(x => x.trim()));
 }
 
+/**
+ * Detecta se a planilha está em formato de matriz/crosstab
+ * Exemplo: DATA nas linhas, FUNCIONÁRIOS nas colunas, STATUS nas células
+ */
+function detectMatrixFormat(grid: any[][], headerRowIdx: number): {
+  isMatrix: boolean;
+  dateColumnIdx: number;
+  headerRowsCount: number;
+  entityNames: string[];
+  groupRow?: any[];
+} {
+  const headerRow = grid[headerRowIdx] || [];
+  const prevRow = headerRowIdx > 0 ? grid[headerRowIdx - 1] : null;
+  
+  // Verifica se a primeira coluna tem datas
+  const firstColValues: any[] = [];
+  for (let r = headerRowIdx + 1; r < Math.min(grid.length, headerRowIdx + 20); r++) {
+    const row = grid[r];
+    if (row && row[0] != null) {
+      firstColValues.push(row[0]);
+    }
+  }
+  
+  const dateCount = firstColValues.filter(isDateValue).length;
+  const hasDateColumn = dateCount / Math.max(firstColValues.length, 1) > 0.6;
+  
+  if (!hasDateColumn) {
+    return { isMatrix: false, dateColumnIdx: -1, headerRowsCount: 1, entityNames: [] };
+  }
+  
+  // Verifica se o restante do cabeçalho são nomes (texto, não numéricos)
+  const potentialNames = headerRow.slice(1).filter(h => 
+    h != null && String(h).trim() !== "" && isNaN(parseFloat(String(h)))
+  );
+  
+  if (potentialNames.length < 2) {
+    return { isMatrix: false, dateColumnIdx: -1, headerRowsCount: 1, entityNames: [] };
+  }
+  
+  // Verifica se os valores são categóricos (ENTREGUE, FOLGA, etc.)
+  const cellValues = new Set<string>();
+  for (let r = headerRowIdx + 1; r < Math.min(grid.length, headerRowIdx + 10); r++) {
+    const row = grid[r] || [];
+    for (let c = 1; c < Math.min(row.length, 10); c++) {
+      const v = row[c];
+      if (v != null && String(v).trim() !== "") {
+        cellValues.add(String(v).trim().toUpperCase());
+      }
+    }
+  }
+  
+  // Se tem poucos valores únicos nas células, provavelmente é matriz
+  const isMatrix = cellValues.size <= 20 && cellValues.size > 0;
+  
+  // Extrai nomes das entidades do cabeçalho
+  const entityNames = headerRow.slice(1)
+    .map((h: any) => String(h ?? "").trim())
+    .filter((n: string) => n !== "");
+  
+  return {
+    isMatrix,
+    dateColumnIdx: 0,
+    headerRowsCount: prevRow ? 2 : 1,
+    entityNames,
+    groupRow: prevRow,
+  };
+}
+
+/**
+ * Converte formato matriz para formato longo (normalizado)
+ */
+function transposeMatrixToLong(
+  grid: any[][],
+  headerRowIdx: number,
+  matrixInfo: ReturnType<typeof detectMatrixFormat>
+): any[][] {
+  const headerRow = grid[headerRowIdx] || [];
+  const dateColName = String(headerRow[0] || "DATA").trim();
+  
+  // Detecta grupos (linha anterior ao cabeçalho, se existir)
+  const groups: { [colIdx: number]: string } = {};
+  if (matrixInfo.groupRow) {
+    let currentGroup = "";
+    for (let c = 1; c < matrixInfo.groupRow.length; c++) {
+      const g = String(matrixInfo.groupRow[c] || "").trim();
+      if (g) currentGroup = g;
+      groups[c] = currentGroup;
+    }
+  }
+  
+  // Monta novo grid no formato longo
+  const hasGroups = Object.values(groups).some(g => g !== "");
+  const newHeader = hasGroups 
+    ? [dateColName, "ENTIDADE", "GRUPO", "VALOR"]
+    : [dateColName, "ENTIDADE", "VALOR"];
+  
+  const newGrid: any[][] = [newHeader];
+  
+  for (let r = headerRowIdx + 1; r < grid.length; r++) {
+    const row = grid[r] || [];
+    const dateValue = row[0];
+    
+    // Pula linhas sem data
+    if (dateValue == null || String(dateValue).trim() === "") continue;
+    
+    for (let c = 1; c < headerRow.length; c++) {
+      const entityName = String(headerRow[c] || "").trim();
+      if (!entityName) continue;
+      
+      const cellValue = row[c];
+      const group = groups[c] || "";
+      
+      if (hasGroups) {
+        newGrid.push([dateValue, entityName, group, cellValue ?? ""]);
+      } else {
+        newGrid.push([dateValue, entityName, cellValue ?? ""]);
+      }
+    }
+  }
+  
+  return newGrid;
+}
+
 function parseGridToDataset(grid: any[][], fileName: string): Dataset {
   // Encontra a linha de cabeçalho
-  const headerRowIdx = findHeaderRow(grid);
-  const headerRow = grid[headerRowIdx] || [];
+  let headerRowIdx = findHeaderRow(grid);
+  
+  // Detecta se é formato matriz
+  const matrixInfo = detectMatrixFormat(grid, headerRowIdx);
+  
+  // Se for matriz, transpõe para formato longo
+  let workingGrid = grid;
+  if (matrixInfo.isMatrix) {
+    console.log("📊 Formato matriz detectado, convertendo para formato longo...");
+    workingGrid = transposeMatrixToLong(grid, headerRowIdx, matrixInfo);
+    headerRowIdx = 0; // Novo cabeçalho está na primeira linha
+  }
+  
+  const headerRow = workingGrid[headerRowIdx] || [];
   
   // Encontra colunas válidas (com cabeçalho)
   const columns: ColumnMetadata[] = [];
@@ -143,8 +278,8 @@ function parseGridToDataset(grid: any[][], fileName: string): Dataset {
     
     // Coleta valores desta coluna
     const colValues: any[] = [];
-    for (let r = headerRowIdx + 1; r < grid.length; r++) {
-      const row = grid[r] || [];
+    for (let r = headerRowIdx + 1; r < workingGrid.length; r++) {
+      const row = workingGrid[r] || [];
       if (row.some(cell => cell != null && String(cell).trim() !== "")) {
         colValues.push(row[c]);
       }
@@ -176,8 +311,8 @@ function parseGridToDataset(grid: any[][], fileName: string): Dataset {
   
   // Extrai dados como objetos genéricos
   const rows: GenericRow[] = [];
-  for (let r = headerRowIdx + 1; r < grid.length; r++) {
-    const gridRow = grid[r] || [];
+  for (let r = headerRowIdx + 1; r < workingGrid.length; r++) {
+    const gridRow = workingGrid[r] || [];
     
     // Pula linhas completamente vazias
     if (gridRow.every(cell => cell == null || String(cell).trim() === "")) continue;
