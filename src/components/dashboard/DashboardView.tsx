@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef } from "react";
-import { CheckCircle, AlertCircle, Coffee, Clock, Users, TrendingUp, FileDown, Loader2, Globe } from "lucide-react";
+import { CheckCircle, AlertCircle, Coffee, Clock, Users, TrendingUp, FileDown, Loader2, FileSpreadsheet } from "lucide-react";
 import type { Dataset } from "@/lib/database";
 import type { DateRange } from "@/pages/Index";
 import { KPICard } from "./KPICard";
@@ -7,7 +7,7 @@ import { KPIDetailModal, type KPIType } from "./KPIDetailModal";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { exportDashboardToPDF } from "@/lib/pdfExport";
-import { exportToInteractiveHTML } from "@/lib/htmlExport";
+import { exportToExcel } from "@/lib/excelExport";
 import {
   ChartCard,
   DeliveryLineChart,
@@ -148,9 +148,9 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     }
   };
 
-  const handleExportHTML = () => {
+  const handleExportExcel = () => {
     try {
-      exportToInteractiveHTML({
+      exportToExcel({
         dataset,
         filters: {
           team: teamFilter,
@@ -160,10 +160,10 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           dateTo: dateRange.to,
         },
       });
-      toast({ title: "HTML interativo exportado com sucesso!" });
+      toast({ title: "Excel exportado com sucesso!" });
     } catch (error) {
-      console.error("Error exporting HTML:", error);
-      toast({ title: "Erro ao exportar HTML", variant: "destructive" });
+      console.error("Error exporting Excel:", error);
+      toast({ title: "Erro ao exportar Excel", variant: "destructive" });
     }
   };
 
@@ -185,11 +185,11 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
         <Button
           variant="outline"
           size="sm"
-          onClick={handleExportHTML}
+          onClick={handleExportExcel}
           className="gap-2"
         >
-          <Globe className="w-4 h-4" />
-          Exportar HTML
+          <FileSpreadsheet className="w-4 h-4" />
+          Exportar Excel
         </Button>
         <Button
           variant="outline"
