@@ -31,7 +31,7 @@ export default function Index() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [teamFilter, setTeamFilter] = useState("ALL");
   const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
-  const [activeTab, setActiveTab] = useState<"dashboard" | "planilha">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "planilha">("planilha");
 
   // Get available date range from dataset
   const availableDateRange = useMemo(() => {
@@ -164,17 +164,6 @@ export default function Index() {
                     Limpar Filtros
                   </Button>
                 )}
-
-                {/* Botão Editar - abre a planilha em modo edição */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 font-semibold"
-                  onClick={() => setActiveTab("planilha")}
-                >
-                  <Edit3 className="w-4 h-4" />
-                  Editar
-                </Button>
               </div>
 
               {/* Tab Switcher */}
