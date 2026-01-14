@@ -253,23 +253,35 @@ function transposeMatrixToLong(
   return newGrid;
 }
 
-function parseGridToDataset(grid: any[][], fileName: string): Dataset {
+function parseGridToDatasetWithFormat(
+  grid: any[][],
+  fileName: string,
+  forceFormat: "auto" | "long" | "matrix" = "auto"
+): Dataset {
   // Encontra a linha de cabeçalho
   let headerRowIdx = findHeaderRow(grid);
   
   // Detecta se é formato matriz
   const matrixInfo = detectMatrixFormat(grid, headerRowIdx);
   
+  // Decide se transpõe baseado no formato forçado ou detecção automática
+  const shouldTranspose = 
+    forceFormat === "matrix" || 
+    (forceFormat === "auto" && matrixInfo.isMatrix);
+  
   // Se for matriz, transpõe para formato longo
   let workingGrid = grid;
-  if (matrixInfo.isMatrix) {
-    console.log("📊 Formato matriz detectado, convertendo para formato longo...");
+  if (shouldTranspose) {
+    console.log("📊 Usando formato matriz, convertendo para formato longo...");
     workingGrid = transposeMatrixToLong(grid, headerRowIdx, matrixInfo);
     headerRowIdx = 0; // Novo cabeçalho está na primeira linha
+  } else if (forceFormat === "long") {
+    console.log("📋 Usando formato longo (forçado)");
   }
   
   const headerRow = workingGrid[headerRowIdx] || [];
   
+  // ... resto da função continua igual
   // Encontra colunas válidas (com cabeçalho)
   const columns: ColumnMetadata[] = [];
   
@@ -298,7 +310,7 @@ function parseGridToDataset(grid: any[][], fileName: string): Dataset {
       name,
       originalIndex: c,
       type,
-      uniqueValues: Array.from(uniqueSet).slice(0, 100), // Limita para performance
+      uniqueValues: Array.from(uniqueSet).slice(0, 100),
       sampleValues: colValues.slice(0, 10),
       isNumeric: type === "number",
       isDate: type === "date",
@@ -339,7 +351,6 @@ function parseGridToDataset(grid: any[][], fileName: string): Dataset {
     
     rows.push(row);
   }
-  
   // Detecta colunas principais
   const dateColumn = validColumns.find(c => c.type === "date");
   const categoryColumns = validColumns.filter(c => c.type === "category");
@@ -407,7 +418,12 @@ function calculateSummary(rows: GenericRow[], columns: ColumnMetadata[], dateCol
   return summary;
 }
 
-export async function parseExcelFile(file: File): Promise<Dataset> {
+export type ImportFormat = "auto" | "long" | "matrix";
+
+export async function parseExcelFile(
+  file: File, 
+  format: ImportFormat = "auto"
+): Promise<Dataset> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     const isCSV = file.name.toLowerCase().endsWith(".csv");
@@ -444,7 +460,7 @@ export async function parseExcelFile(file: File): Promise<Dataset> {
           }) as any[][];
         }
         
-        const dataset = parseGridToDataset(grid, file.name);
+        const dataset = parseGridToDatasetWithFormat(grid, file.name, format);
         resolve(dataset);
       } catch (error) {
         reject(error);

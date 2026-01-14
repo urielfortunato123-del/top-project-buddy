@@ -8,7 +8,7 @@ import {
   getCurrentDatasetId,
   setCurrentDatasetId,
 } from "@/lib/database";
-import { parseExcelFile } from "@/lib/excelParser";
+import { parseExcelFile, type ImportFormat } from "@/lib/excelParser";
 
 export function useDatasets() {
   const [datasets, setDatasets] = useState<Dataset[]>([]);
@@ -47,11 +47,11 @@ export function useDatasets() {
     loadDatasets();
   }, [loadDatasets]);
 
-  const importFile = useCallback(async (file: File) => {
+  const importFile = useCallback(async (file: File, format: ImportFormat = "auto") => {
     try {
       setLoading(true);
       setError(null);
-      const dataset = await parseExcelFile(file);
+      const dataset = await parseExcelFile(file, format);
       await saveDataset(dataset);
       await setCurrentDatasetId(dataset.id);
       setCurrentDataset(dataset);
