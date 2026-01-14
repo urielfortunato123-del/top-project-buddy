@@ -186,6 +186,78 @@ export function TeamBarChart({ data }: { data: { team: string; entregue: number;
   );
 }
 
+interface TeamComparisonData {
+  team: string;
+  entregue: number;
+  total: number;
+  taxa: number;
+}
+
+export function TeamComparisonChart({ data }: { data: TeamComparisonData[] }) {
+  // Sort by delivery rate (taxa)
+  const sortedData = [...data].sort((a, b) => b.taxa - a.taxa);
+  const maxTaxa = Math.max(...sortedData.map(d => d.taxa), 100);
+
+  return (
+    <div className="space-y-3">
+      {sortedData.map((item, idx) => {
+        const isTop = idx === 0;
+        const isBottom = idx === sortedData.length - 1 && sortedData.length > 1;
+        
+        return (
+          <div key={item.team} className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                  isTop ? "bg-primary/20 text-primary" : 
+                  isBottom ? "bg-destructive/20 text-destructive" : 
+                  "bg-muted text-muted-foreground"
+                }`}>
+                  #{idx + 1}
+                </span>
+                <span className="text-sm font-medium truncate max-w-[120px]">{item.team}</span>
+              </div>
+              <div className="text-right">
+                <span className={`text-sm font-bold ${
+                  item.taxa >= 80 ? "text-primary" : 
+                  item.taxa >= 50 ? "text-secondary" : 
+                  "text-destructive"
+                }`}>
+                  {item.taxa}%
+                </span>
+                <span className="text-xs text-muted-foreground ml-1">
+                  ({item.entregue}/{item.total})
+                </span>
+              </div>
+            </div>
+            <div className="h-3 bg-muted rounded-full overflow-hidden">
+              <div 
+                className={`h-full rounded-full transition-all duration-500 ${
+                  item.taxa >= 80 ? "bg-primary" : 
+                  item.taxa >= 50 ? "bg-secondary" : 
+                  "bg-destructive"
+                }`}
+                style={{ width: `${(item.taxa / maxTaxa) * 100}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
+      
+      {sortedData.length > 1 && (
+        <div className="mt-4 pt-3 border-t border-border">
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>Diferença entre 1º e último:</span>
+            <span className="font-bold text-foreground">
+              {sortedData[0].taxa - sortedData[sortedData.length - 1].taxa}pp
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ProgressRing({ value, label }: { value: number; label: string }) {
   const circumference = 2 * Math.PI * 40;
   const strokeDashoffset = circumference - (value / 100) * circumference;
