@@ -113,9 +113,9 @@ export function KPICard({
       )} />
       
       {/* Content */}
-      <div className="relative z-10 flex flex-col h-full">
+      <div className="relative z-10 flex flex-col h-full min-w-0">
         <div className="flex items-start justify-between gap-2">
-          <p className={cn("font-semibold text-muted-foreground uppercase tracking-wide", sizes.title)}>
+          <p className={cn("font-semibold text-muted-foreground uppercase tracking-wide break-words hyphens-auto", sizes.title)}>
             {title}
           </p>
           {icon && (
@@ -129,7 +129,7 @@ export function KPICard({
           )}
         </div>
         
-        <div className="flex items-end gap-3 mt-2">
+        <div className="flex items-end gap-3 mt-2 flex-wrap">
           <p className={cn("font-black text-card-foreground tracking-tight leading-none", sizes.value)}>
             {value}
           </p>
@@ -147,7 +147,7 @@ export function KPICard({
         </div>
         
         {subtitle && (
-          <p className={cn("text-muted-foreground mt-auto pt-2 line-clamp-2", sizes.subtitle)}>
+          <p className={cn("text-muted-foreground mt-auto pt-2", sizes.subtitle)} title={subtitle}>
             {subtitle}
           </p>
         )}
