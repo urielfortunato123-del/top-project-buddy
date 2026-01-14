@@ -84,26 +84,29 @@ export function DeliveryLineChart({ data }: { data: LineChartData[] }) {
             <stop offset="100%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0.05} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 32%, 91%)" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
         <XAxis 
           dataKey="date" 
-          tick={{ fontSize: 11, fill: "hsl(215, 16%, 47%)", fontWeight: 500 }} 
+          tick={{ fontSize: 11, fontWeight: 500 }} 
           tickFormatter={(v) => v.slice(5)}
-          axisLine={{ stroke: "hsl(214, 32%, 91%)" }}
+          className="text-muted-foreground [&_.recharts-cartesian-axis-tick-value]:fill-muted-foreground"
+          axisLine={false}
           tickLine={false}
         />
         <YAxis 
           allowDecimals={false} 
-          tick={{ fontSize: 11, fill: "hsl(215, 16%, 47%)", fontWeight: 500 }} 
+          tick={{ fontSize: 11, fontWeight: 500 }} 
+          className="[&_.recharts-cartesian-axis-tick-value]:fill-muted-foreground"
           axisLine={false}
           tickLine={false}
         />
         <Tooltip 
           contentStyle={{ 
-            backgroundColor: "hsl(0, 0%, 100%)", 
-            border: "none",
+            backgroundColor: "hsl(var(--card))", 
+            color: "hsl(var(--card-foreground))",
+            border: "1px solid hsl(var(--border))",
             borderRadius: "12px",
-            boxShadow: "0 10px 40px -10px rgba(0,0,0,0.2)",
+            boxShadow: "0 10px 40px -10px rgba(0,0,0,0.3)",
             fontSize: "12px",
             fontWeight: 500,
           }} 
@@ -141,22 +144,30 @@ export function PersonBarChart({ data }: { data: BarChartData[] }) {
   return (
     <ResponsiveContainer width="100%" height={280}>
       <BarChart data={top10} layout="vertical" barGap={0}>
-        <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 32%, 91%)" horizontal={true} vertical={false} />
-        <XAxis type="number" tick={{ fontSize: 11, fill: "hsl(215, 16%, 47%)" }} axisLine={false} tickLine={false} />
+        <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={true} vertical={false} />
+        <XAxis 
+          type="number" 
+          tick={{ fontSize: 11 }} 
+          className="[&_.recharts-cartesian-axis-tick-value]:fill-muted-foreground"
+          axisLine={false} 
+          tickLine={false} 
+        />
         <YAxis 
           type="category" 
           dataKey="person" 
-          tick={{ fontSize: 11, fill: "hsl(215, 16%, 47%)", fontWeight: 500 }} 
+          tick={{ fontSize: 11, fontWeight: 500 }} 
           width={100}
+          className="[&_.recharts-cartesian-axis-tick-value]:fill-muted-foreground"
           axisLine={false}
           tickLine={false}
         />
         <Tooltip 
           contentStyle={{ 
-            backgroundColor: "hsl(0, 0%, 100%)", 
-            border: "none",
+            backgroundColor: "hsl(var(--card))", 
+            color: "hsl(var(--card-foreground))",
+            border: "1px solid hsl(var(--border))",
             borderRadius: "12px",
-            boxShadow: "0 10px 40px -10px rgba(0,0,0,0.2)",
+            boxShadow: "0 10px 40px -10px rgba(0,0,0,0.3)",
             fontSize: "12px",
           }} 
         />
@@ -187,7 +198,8 @@ export function StatusPieChart({ data }: { data: PieChartData[] }) {
             outerRadius={85}
             innerRadius={55}
             paddingAngle={2}
-            strokeWidth={0}
+            stroke="hsl(var(--card))"
+            strokeWidth={2}
           >
             {data.map((_, idx) => (
               <Cell key={idx} fill={COLORS[idx % COLORS.length]} />
@@ -195,10 +207,11 @@ export function StatusPieChart({ data }: { data: PieChartData[] }) {
           </Pie>
           <Tooltip 
             contentStyle={{ 
-              backgroundColor: "hsl(0, 0%, 100%)", 
-              border: "none",
+              backgroundColor: "hsl(var(--card))", 
+              color: "hsl(var(--card-foreground))",
+              border: "1px solid hsl(var(--border))",
               borderRadius: "12px",
-              boxShadow: "0 10px 40px -10px rgba(0,0,0,0.2)",
+              boxShadow: "0 10px 40px -10px rgba(0,0,0,0.3)",
               fontSize: "12px",
             }} 
           />
@@ -235,10 +248,11 @@ export function TeamBarChart({ data }: { data: { team: string; entregue: number;
             <stop offset="100%" stopColor="hsl(142, 71%, 35%)" />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 32%, 91%)" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
         <XAxis 
           dataKey="team" 
-          tick={{ fontSize: 10, fill: "hsl(215, 16%, 47%)", fontWeight: 500 }}
+          tick={{ fontSize: 10, fontWeight: 500 }}
+          className="[&_.recharts-cartesian-axis-tick-value]:fill-muted-foreground"
           interval={0}
           angle={-25}
           textAnchor="end"
@@ -246,13 +260,19 @@ export function TeamBarChart({ data }: { data: { team: string; entregue: number;
           axisLine={false}
           tickLine={false}
         />
-        <YAxis tick={{ fontSize: 11, fill: "hsl(215, 16%, 47%)" }} axisLine={false} tickLine={false} />
+        <YAxis 
+          tick={{ fontSize: 11 }} 
+          className="[&_.recharts-cartesian-axis-tick-value]:fill-muted-foreground"
+          axisLine={false} 
+          tickLine={false} 
+        />
         <Tooltip 
           contentStyle={{ 
-            backgroundColor: "hsl(0, 0%, 100%)", 
-            border: "none",
+            backgroundColor: "hsl(var(--card))", 
+            color: "hsl(var(--card-foreground))",
+            border: "1px solid hsl(var(--border))",
             borderRadius: "12px",
-            boxShadow: "0 10px 40px -10px rgba(0,0,0,0.2)",
+            boxShadow: "0 10px 40px -10px rgba(0,0,0,0.3)",
             fontSize: "12px",
           }} 
         />
@@ -356,7 +376,7 @@ export function ProgressRing({ value, label, size = "md" }: { value: number; lab
             cx={dim / 2}
             cy={dim / 2}
             r={radius}
-            stroke="hsl(214, 32%, 91%)"
+            className="stroke-muted"
             strokeWidth="10"
             fill="none"
           />
