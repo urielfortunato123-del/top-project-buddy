@@ -34,24 +34,22 @@ export function KPICard({
     <div
       onClick={onClick}
       className={cn(
-        "bg-card rounded-2xl border p-4 shadow-lg animate-fade-in transition-all",
+        "bg-card rounded-2xl border p-3 md:p-4 shadow-lg animate-fade-in transition-all h-full flex flex-col",
         variantStyles[variant],
         onClick && "cursor-pointer hover:shadow-xl hover:scale-[1.02] hover:border-primary/30 active:scale-[0.98]",
         className
       )}
     >
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm font-medium text-muted-foreground mb-1">{title}</p>
-          <p className="text-3xl font-black text-card-foreground">{value}</p>
-          {subtitle && (
-            <p className="text-xs text-muted-foreground mt-2">{subtitle}</p>
-          )}
-        </div>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs md:text-sm font-medium text-muted-foreground truncate">{title}</p>
         {icon && (
-          <div className="p-2 rounded-xl bg-muted/50">{icon}</div>
+          <div className="p-1.5 md:p-2 rounded-lg md:rounded-xl bg-muted/50 shrink-0">{icon}</div>
         )}
       </div>
+      <p className="text-2xl md:text-3xl font-black text-card-foreground mt-1">{value}</p>
+      {subtitle && (
+        <p className="text-[10px] md:text-xs text-muted-foreground mt-auto pt-1 line-clamp-2">{subtitle}</p>
+      )}
     </div>
   );
 }
