@@ -3,6 +3,7 @@ import { Download, Edit3 } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { DashboardView } from "@/components/dashboard/DashboardView";
 import { MatrixTable } from "@/components/dashboard/MatrixTable";
+import { DetailTable } from "@/components/dashboard/DetailTable";
 import { SpreadsheetView } from "@/components/dashboard/SpreadsheetView";
 import { ViewTabs } from "@/components/dashboard/ViewTabs";
 import { DatasetSelect } from "@/components/dashboard/DatasetSelect";
@@ -359,23 +360,37 @@ export default function Index() {
         )}
       </main>
 
-      {/* RIGHT: Matrix Panel - Only show in Dashboard view if we have category data */}
+      {/* RIGHT: Matrix + Detail Panel - Only show in Dashboard view if we have category data */}
       {activeDataset && activeTab === "dashboard" && (matrixCandidateColumns?.length ?? 0) >= 1 && (
         <aside className="w-[520px] shrink-0 border-l bg-white overflow-hidden flex flex-col shadow-sm">
-          <MatrixTable 
-            rows={filteredRows}
-            domainRows={activeDataset.rows}
-            rowColumn={activeDataset.matrixConfig?.rowColumn || findBestPersonColumn(matrixCandidateColumns, activeDataset.rows)}
-            colColumn={activeDataset.matrixConfig?.colColumn || findDateColumn(matrixCandidateColumns, activeDataset.rows, activeDataset.detectedDateColumn)}
-            valueColumn={activeDataset.matrixConfig?.valueColumn || findStatusColumn(matrixCandidateColumns, activeDataset.rows) || matrixCandidateColumns[0]}
-            availableColumns={activeDataset.columns?.map(c => typeof c === 'string' ? c : c.name) || []}
-            onColumnsChange={async (row, col, value) => {
-              const newConfig: MatrixConfig = { rowColumn: row, colColumn: col, valueColumn: value };
-              const updated = { ...activeDataset, matrixConfig: newConfig, updatedAt: new Date().toISOString() };
-              await saveDataset(updated);
-              updateDataset(updated);
-            }}
-          />
+          {/* Matrix Table - parte superior */}
+          <div className="h-[55%] border-b overflow-hidden">
+            <MatrixTable 
+              rows={filteredRows}
+              domainRows={activeDataset.rows}
+              rowColumn={activeDataset.matrixConfig?.rowColumn || findBestPersonColumn(matrixCandidateColumns, activeDataset.rows)}
+              colColumn={activeDataset.matrixConfig?.colColumn || findDateColumn(matrixCandidateColumns, activeDataset.rows, activeDataset.detectedDateColumn)}
+              valueColumn={activeDataset.matrixConfig?.valueColumn || findStatusColumn(matrixCandidateColumns, activeDataset.rows) || matrixCandidateColumns[0]}
+              availableColumns={activeDataset.columns?.map(c => typeof c === 'string' ? c : c.name) || []}
+              onColumnsChange={async (row, col, value) => {
+                const newConfig: MatrixConfig = { rowColumn: row, colColumn: col, valueColumn: value };
+                const updated = { ...activeDataset, matrixConfig: newConfig, updatedAt: new Date().toISOString() };
+                await saveDataset(updated);
+                updateDataset(updated);
+              }}
+            />
+          </div>
+
+          {/* Detail Table - parte inferior */}
+          <div className="flex-1 overflow-hidden">
+            <DetailTable
+              rows={filteredRows}
+              dateColumn={findDateColumn(matrixCandidateColumns, activeDataset.rows, activeDataset.detectedDateColumn)}
+              personColumn={filterColumns.personCol || findBestPersonColumn(matrixCandidateColumns, activeDataset.rows)}
+              teamColumn={filterColumns.teamCol || matrixCandidateColumns[0] || ""}
+              statusColumn={filterColumns.statusCol || findStatusColumn(matrixCandidateColumns, activeDataset.rows) || ""}
+            />
+          </div>
         </aside>
       )}
     </div>
