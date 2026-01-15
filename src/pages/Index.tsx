@@ -172,6 +172,26 @@ export default function Index() {
     return Array.from(new Set([...(safeCategoryColumns || []), ...(safeTextColumns || [])])).filter(Boolean);
   }, [safeCategoryColumns, safeTextColumns]);
 
+  // Colunas efetivas usadas pelos filtros (tenta acertar Pessoa/Status/Equipe mesmo quando a ordem detectada muda)
+  const filterColumns = useMemo(() => {
+    if (!activeDataset) return { teamCol: "", personCol: "", statusCol: "" };
+
+    const candidates = matrixCandidateColumns;
+
+    const statusCol = findStatusColumn(candidates, safeRows) || "";
+    const personCol = findBestPersonColumn(candidates, safeRows) || "";
+
+    // Equipe: primeira coluna candidata que não seja pessoa/status e não pareça data
+    const dateCol = findDateColumn(candidates, safeRows, activeDataset.detectedDateColumn);
+
+    const teamCol =
+      candidates.find((c) => c && c !== personCol && c !== statusCol && c !== dateCol) ||
+      safeCategoryColumns.find((c) => c && c !== personCol && c !== statusCol) ||
+      "";
+
+    return { teamCol, personCol, statusCol };
+  }, [activeDataset, matrixCandidateColumns, safeRows, safeCategoryColumns]);
+
   const [personFilter, setPersonFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [teamFilter, setTeamFilter] = useState("ALL");
@@ -183,16 +203,16 @@ export default function Index() {
     if (!activeDataset || (safeRows.length ?? 0) === 0) return { min: undefined, max: undefined };
     const dateCol = activeDataset.detectedDateColumn;
     if (!dateCol) return { min: undefined, max: undefined };
-    
+
     const dates = safeRows
-      .map(r => r[dateCol])
-      .filter(d => d && typeof d === "string")
+      .map((r) => r[dateCol])
+      .filter((d) => d && typeof d === "string")
       .sort();
-    
+
     if ((dates?.length ?? 0) === 0) return { min: undefined, max: undefined };
-    return { 
-      min: new Date(dates[0]), 
-      max: new Date(dates[(dates?.length ?? 1) - 1]) 
+    return {
+      min: new Date(dates[0]),
+      max: new Date(dates[(dates?.length ?? 1) - 1]),
     };
   }, [activeDataset, safeRows]);
 
@@ -201,7 +221,7 @@ export default function Index() {
     if (!activeDataset) return [];
     let data = [...safeRows];
     const dateCol = activeDataset.detectedDateColumn;
-    
+
     if (dateCol && dateRange.from) {
       const fromStr = dateRange.from.toISOString().slice(0, 10);
       data = data.filter((r) => r[dateCol] >= fromStr);
@@ -210,20 +230,20 @@ export default function Index() {
       const toStr = dateRange.to.toISOString().slice(0, 10);
       data = data.filter((r) => r[dateCol] <= toStr);
     }
-    
-    // Filtros de categoria baseados nas colunas detectadas
-    if (teamFilter !== "ALL" && safeCategoryColumns[0]) {
-      data = data.filter((r) => r[safeCategoryColumns[0]] === teamFilter);
+
+    // Filtros por colunas detectadas (mais robusto do que usar índices fixos)
+    if (teamFilter !== "ALL" && filterColumns.teamCol) {
+      data = data.filter((r) => r[filterColumns.teamCol] === teamFilter);
     }
-    if (personFilter !== "ALL" && safeCategoryColumns[1]) {
-      data = data.filter((r) => r[safeCategoryColumns[1]] === personFilter);
+    if (personFilter !== "ALL" && filterColumns.personCol) {
+      data = data.filter((r) => r[filterColumns.personCol] === personFilter);
     }
-    if (statusFilter !== "ALL" && safeCategoryColumns[2]) {
-      data = data.filter((r) => r[safeCategoryColumns[2]] === statusFilter);
+    if (statusFilter !== "ALL" && filterColumns.statusCol) {
+      data = data.filter((r) => r[filterColumns.statusCol] === statusFilter);
     }
-    
+
     return data;
-  }, [activeDataset, safeRows, safeCategoryColumns, personFilter, statusFilter, teamFilter, dateRange]);
+  }, [activeDataset, safeRows, personFilter, statusFilter, teamFilter, dateRange, filterColumns]);
 
   React.useEffect(() => {
     setPersonFilter("ALL");
@@ -232,18 +252,24 @@ export default function Index() {
     setDateRange({ from: undefined, to: undefined });
   }, [activeDataset?.id]);
 
-  // Listas dinâmicas baseadas nas colunas de categoria
+  // Listas dinâmicas baseadas nas colunas dos filtros
   const { peopleList, statusList, teamList } = useMemo(() => {
     if (!activeDataset || !activeDataset.summary) return { peopleList: [], statusList: [], teamList: [] };
-    
+
     const counts = activeDataset.summary.categoryCounts || {};
-    
+
+    const teamCounts = filterColumns.teamCol ? counts[filterColumns.teamCol] : undefined;
+    const personCounts = filterColumns.personCol ? counts[filterColumns.personCol] : undefined;
+    const statusCounts = filterColumns.statusCol ? counts[filterColumns.statusCol] : undefined;
+
+    const toSortedKeys = (obj?: Record<string, number>) => (obj ? Object.keys(obj).sort((a, b) => a.localeCompare(b, "pt-BR")) : []);
+
     return {
-      teamList: safeCategoryColumns[0] && counts[safeCategoryColumns[0]] ? Object.keys(counts[safeCategoryColumns[0]]) : [],
-      peopleList: safeCategoryColumns[1] && counts[safeCategoryColumns[1]] ? Object.keys(counts[safeCategoryColumns[1]]) : [],
-      statusList: safeCategoryColumns[2] && counts[safeCategoryColumns[2]] ? Object.keys(counts[safeCategoryColumns[2]]) : [],
+      teamList: toSortedKeys(teamCounts),
+      peopleList: toSortedKeys(personCounts),
+      statusList: toSortedKeys(statusCounts),
     };
-  }, [activeDataset, safeCategoryColumns]);
+  }, [activeDataset, filterColumns]);
 
   const clearFilters = () => {
     setPersonFilter("ALL");
