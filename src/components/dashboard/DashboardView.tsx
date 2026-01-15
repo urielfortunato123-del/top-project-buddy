@@ -124,16 +124,25 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     return data;
   }, [dataset, safeRows, safeCategoryColumns, personFilter, statusFilter, teamFilter, dateRange]);
 
-  // KPIs específicos para RDA
+  // KPIs específicos para RDA com listas detalhadas
   const rdaKpis = useMemo(() => {
     if (!rdaInfo.isRDA || !rdaInfo.statusColumn) return null;
     
     const statusCol = rdaInfo.statusColumn;
     const personCol = rdaInfo.personColumn;
     
-    // Conta status
+    // Conta status e coleta pessoas por status
     const statusCounts: Record<string, number> = {};
     const uniquePeople = new Set<string>();
+    const peopleByStatus: Record<string, Set<string>> = {
+      entregue: new Set(),
+      pendencias: new Set(),
+      folga: new Set(),
+      banco: new Set(),
+      falta: new Set(),
+      atestado: new Set(),
+      ferias: new Set(),
+    };
     
     for (const r of filtered) {
       const status = String(r[statusCol] || "VAZIO").trim().toUpperCase();
@@ -143,6 +152,23 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
         const person = String(r[personCol] || "").trim();
         if (person && !/^(ENTREGUE?|FOLGA?|FALTA?|BANCO|ATESTADO?|FER[IÉ]AS?|VAZIO|-)$/i.test(person)) {
           uniquePeople.add(person);
+          
+          // Agrupa pessoas por status
+          if (status === "ENTREGUE" || status === "ENT") {
+            peopleByStatus.entregue.add(person);
+          } else if (status === "FOLGA" || status === "FOL") {
+            peopleByStatus.folga.add(person);
+          } else if (status === "BANCO DE HORAS" || status === "BANCO" || status === "BAN") {
+            peopleByStatus.banco.add(person);
+          } else if (status === "FALTA" || status === "FAL") {
+            peopleByStatus.falta.add(person);
+          } else if (status === "ATESTADO" || status === "ATE") {
+            peopleByStatus.atestado.add(person);
+          } else if (status === "FÉRIAS" || status === "FERIAS" || status === "FER") {
+            peopleByStatus.ferias.add(person);
+          } else if (status === "VAZIO" || status === "-" || status === "") {
+            peopleByStatus.pendencias.add(person);
+          }
         }
       }
     }
@@ -159,6 +185,10 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     const taxaEntrega = total > 0 ? Math.round((entregue / total) * 100) : 0;
     const pendencias = total - entregue - folga - banco - falta - atestado - ferias;
     
+    // Converte sets para arrays
+    const toDetailList = (set: Set<string>) => 
+      Array.from(set).sort().map(name => ({ name }));
+    
     return {
       taxaEntrega,
       entregue,
@@ -170,6 +200,15 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
       ferias,
       pessoas: uniquePeople.size,
       total,
+      // Listas detalhadas
+      peopleList: toDetailList(uniquePeople),
+      entregueList: toDetailList(peopleByStatus.entregue),
+      pendenciasList: toDetailList(peopleByStatus.pendencias),
+      folgaList: toDetailList(peopleByStatus.folga),
+      bancoList: toDetailList(peopleByStatus.banco),
+      faltaList: toDetailList(peopleByStatus.falta),
+      atestadoList: toDetailList(peopleByStatus.atestado),
+      feriasList: toDetailList(peopleByStatus.ferias),
     };
   }, [filtered, rdaInfo]);
 
@@ -189,6 +228,7 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
       distribution?: Array<{ name: string; value: number }>;
       total?: number;
       percentage?: number;
+      detailList?: Array<{ name: string; detail?: string }>;
     }> = [];
     
     // Se for RDA, usa KPIs específicos
@@ -202,42 +242,47 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
         type: "count",
         total: rdaKpis.total,
         percentage: rdaKpis.taxaEntrega,
+        detailList: rdaKpis.entregueList,
       });
       
       result.push({
         title: "Total Entregue",
         value: rdaKpis.entregue.toLocaleString("pt-BR"),
-        subtitle: "Marcados como ENTREGUE",
+        subtitle: `${rdaKpis.entregueList.length} colaboradores`,
         icon: <CheckCircle2 className="w-4 h-4 md:w-5 md:h-5 text-primary" />,
         variant: "success",
         type: "count",
+        detailList: rdaKpis.entregueList,
       });
       
       result.push({
         title: "Pendências",
         value: rdaKpis.pendencias.toLocaleString("pt-BR"),
-        subtitle: "Sem informação lançada",
+        subtitle: `${rdaKpis.pendenciasList.length} colaboradores`,
         icon: <AlertCircle className="w-4 h-4 md:w-5 md:h-5 text-secondary" />,
         variant: "warning",
         type: "count",
+        detailList: rdaKpis.pendenciasList,
       });
       
       result.push({
         title: "Folgas",
         value: rdaKpis.folga.toLocaleString("pt-BR"),
-        subtitle: "Dias de folga",
+        subtitle: `${rdaKpis.folgaList.length} colaboradores`,
         icon: <Coffee className="w-4 h-4 md:w-5 md:h-5 text-accent" />,
         variant: "info",
         type: "count",
+        detailList: rdaKpis.folgaList,
       });
       
       result.push({
         title: "Banco de Horas",
         value: rdaKpis.banco.toLocaleString("pt-BR"),
-        subtitle: "Compensações",
+        subtitle: `${rdaKpis.bancoList.length} colaboradores`,
         icon: <Clock className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />,
         variant: "default",
         type: "count",
+        detailList: rdaKpis.bancoList,
       });
       
       result.push({
@@ -247,6 +292,7 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
         icon: <Users className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />,
         variant: "default",
         type: "count",
+        detailList: rdaKpis.peopleList,
       });
       
       return result;
