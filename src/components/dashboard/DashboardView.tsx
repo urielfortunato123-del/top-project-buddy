@@ -378,6 +378,17 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
   };
 
   // Gera dados para gráfico de linha (entregas por dia)
+  // Helper para normalizar data para string ISO
+  const normalizeDateValue = (v: any): string => {
+    if (!v) return "";
+    if (v instanceof Date) return v.toISOString().slice(0, 10);
+    if (typeof v === "object" && v._type === "Date" && v.value?.iso) {
+      return v.value.iso.slice(0, 10);
+    }
+    if (typeof v === "string") return v;
+    return String(v);
+  };
+
   const lineChartData = useMemo(() => {
     if (!dataset) return null;
     const dateCol = dataset.detectedDateColumn;
@@ -388,7 +399,10 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     const map = new Map<string, { date: string; count: number; entregue: number }>();
     
     for (const r of filtered) {
-      const date = r[dateCol];
+      const rawDate = r[dateCol];
+      if (!rawDate) continue;
+      
+      const date = normalizeDateValue(rawDate);
       if (!date) continue;
       
       const cur = map.get(date) || { date, count: 0, entregue: 0 };
