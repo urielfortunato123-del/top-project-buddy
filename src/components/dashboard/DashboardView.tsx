@@ -6,6 +6,7 @@ import {
   CheckCircle2, Clock, Coffee, Briefcase, AlertCircle
 } from "lucide-react";
 import type { Dataset, ColumnMetadata } from "@/lib/database";
+import { detectSector, extractSampleValues, buildSectorContext, type SectorDetectionResult } from "@/lib/sectorDetection";
 import { KPICard } from "./KPICard";
 import { KPIDetailModal } from "./KPIDetailModal";
 import { Button } from "@/components/ui/button";
@@ -94,6 +95,14 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
   const rdaInfo = useMemo(() => {
     return detectRDAType(safeSummary.categoryCounts || {});
   }, [safeSummary.categoryCounts]);
+
+  // Detecta setor da planilha
+  const sectorInfo = useMemo<SectorDetectionResult | null>(() => {
+    if (!dataset) return null;
+    const colNames = safeColumns.map(c => c.name);
+    const sampleVals = extractSampleValues(safeRows, colNames, 50);
+    return detectSector(colNames, sampleVals);
+  }, [dataset, safeColumns, safeRows]);
 
   // Filtra dados baseado nos filtros ativos
   const filtered = useMemo(() => {
@@ -651,19 +660,21 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           <div className="flex items-center gap-2">
             <div className="w-2 h-8 rounded-full bg-primary" />
             <div>
-              <h1 className="font-black text-lg text-card-foreground tracking-tight">Dashboard</h1>
-              <p className="text-xs text-muted-foreground">{dataset?.name ?? 'Dataset'}</p>
+              <h1 className="font-black text-lg text-card-foreground tracking-tight">{dataset?.name ?? 'Dashboard'}</h1>
+              <p className="text-xs text-muted-foreground">
+                {filtered.length} registros • {safeColumns.length} colunas
+                {safeSummary.dateRange ? ` • ${safeSummary.dateRange.from} a ${safeSummary.dateRange.to}` : ''}
+              </p>
             </div>
           </div>
           
           {/* Quick stats badges */}
           <div className="hidden md:flex items-center gap-2">
-            <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full">
-              {safeColumns.length} colunas
-            </span>
-            <span className="px-3 py-1 bg-accent/10 text-accent text-xs font-bold rounded-full">
-              {filtered.length} registros
-            </span>
+            {sectorInfo && (
+              <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full" title={`Confiança: ${sectorInfo.confidence}% | Palavras: ${sectorInfo.matchedKeywords.join(', ')}`}>
+                {sectorInfo.icon} {sectorInfo.label}
+              </span>
+            )}
             {rdaInfo.isRDA && (
               <span className="px-3 py-1 bg-secondary/10 text-secondary text-xs font-bold rounded-full">
                 📋 RDA

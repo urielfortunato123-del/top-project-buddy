@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import type { Dataset } from "@/lib/database";
+import { detectSector, extractSampleValues, buildSectorContext } from "@/lib/sectorDetection";
 
 interface AutoSummaryProps {
   dataset: Dataset | null;
@@ -12,6 +13,18 @@ interface AutoSummaryProps {
 
 function buildContext(dataset: Dataset): string {
   const lines: string[] = [];
+
+  // Detect sector and prepend context
+  const colNames = dataset.columns?.map(c => c.name) ?? [];
+  const sampleVals = extractSampleValues(dataset.rows, colNames, 50);
+  const sectorResult = detectSector(colNames, sampleVals);
+  if (sectorResult) {
+    lines.push("=== SETOR DETECTADO ===");
+    lines.push(buildSectorContext(sectorResult));
+    lines.push("Use terminologia e KPIs específicos deste setor na análise.");
+    lines.push("========================\n");
+  }
+
   lines.push(`Dataset: ${dataset.name}`);
   lines.push(`Total de linhas: ${dataset.totalRows}`);
 
