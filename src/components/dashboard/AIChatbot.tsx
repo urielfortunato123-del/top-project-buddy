@@ -177,14 +177,14 @@ export function AIChatbot({ dataset, filtered }: AIChatbotProps) {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl transition-all flex items-center justify-center hover:scale-105"
+          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl transition-all flex items-center justify-center hover:scale-105"
         >
-          <Sparkles className="w-6 h-6" />
+          <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
         </button>
       )}
 
       {open && (
-        <div className="fixed bottom-6 right-6 z-50 w-[380px] h-[520px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        <div className="fixed inset-4 sm:inset-auto sm:bottom-6 sm:right-6 z-50 sm:w-[380px] sm:h-[520px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/50">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-primary" />

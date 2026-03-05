@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from "react";
 import { AIChatbot } from "@/components/dashboard/AIChatbot";
 import { AutoSummary } from "@/components/dashboard/AutoSummary";
-import { Download, Edit3 } from "lucide-react";
+import { Download, Edit3, Menu, PanelRightOpen, PanelRightClose } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { DashboardView } from "@/components/dashboard/DashboardView";
 import { MatrixTable } from "@/components/dashboard/MatrixTable";
 import { DetailTable } from "@/components/dashboard/DetailTable";
@@ -10,7 +12,6 @@ import { SpreadsheetView } from "@/components/dashboard/SpreadsheetView";
 import { ViewTabs } from "@/components/dashboard/ViewTabs";
 import { DatasetSelect } from "@/components/dashboard/DatasetSelect";
 import { useDatasets } from "@/hooks/useDatasets";
-import { Button } from "@/components/ui/button";
 import type { DateRange } from "@/lib/dateRange";
 import type { GenericRow, MatrixConfig } from "@/lib/database";
 import { saveDataset } from "@/lib/database";
@@ -200,6 +201,8 @@ export default function Index() {
   const [teamFilter, setTeamFilter] = useState("ALL");
   const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
   const [activeTab, setActiveTab] = useState<"dashboard" | "planilha">("planilha");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [rightPanelOpen, setRightPanelOpen] = useState(true);
 
   // Get available date range from dataset
   const availableDateRange = useMemo(() => {
@@ -284,27 +287,42 @@ export default function Index() {
   const hasActiveFilters = personFilter !== "ALL" || statusFilter !== "ALL" || teamFilter !== "ALL" || dateRange.from || dateRange.to;
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: "#F5F7FB" }}>
-      {/* LEFT: Sidebar */}
-      <Sidebar
-        datasets={safeDatasets}
-        currentDataset={activeDataset}
-        onImport={importFile}
-        onSelectDataset={selectDataset}
-        onDeleteDataset={removeDataset}
-        personFilter={personFilter}
-        setPersonFilter={setPersonFilter}
-        statusFilter={statusFilter}
-        setStatusFilter={setStatusFilter}
-        teamFilter={teamFilter}
-        setTeamFilter={setTeamFilter}
-        dateRange={dateRange}
-        setDateRange={setDateRange}
-        availableDateRange={availableDateRange}
-        peopleList={peopleList}
-        statusList={statusList}
-        teamList={teamList}
-      />
+    <div className="flex h-screen overflow-hidden bg-background">
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* LEFT: Sidebar - hidden on mobile, shown on lg+ */}
+      <div
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 w-64 transition-transform duration-300 lg:static lg:translate-x-0",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        <Sidebar
+          datasets={safeDatasets}
+          currentDataset={activeDataset}
+          onImport={(file, fmt) => { importFile(file, fmt); setSidebarOpen(false); }}
+          onSelectDataset={(id) => { selectDataset(id); setSidebarOpen(false); }}
+          onDeleteDataset={removeDataset}
+          personFilter={personFilter}
+          setPersonFilter={setPersonFilter}
+          statusFilter={statusFilter}
+          setStatusFilter={setStatusFilter}
+          teamFilter={teamFilter}
+          setTeamFilter={setTeamFilter}
+          dateRange={dateRange}
+          setDateRange={setDateRange}
+          availableDateRange={availableDateRange}
+          peopleList={peopleList}
+          statusList={statusList}
+          teamList={teamList}
+        />
+      </div>
 
       {/* CENTER: Dashboard */}
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -314,7 +332,16 @@ export default function Index() {
           </div>
         ) : !activeDataset ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center max-w-md">
+            <div className="text-center max-w-md px-4">
+              {/* Mobile menu button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="lg:hidden absolute top-3 left-3"
+                onClick={() => setSidebarOpen(true)}
+              >
+                <Menu className="w-5 h-5" />
+              </Button>
               <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-2xl">
                 <Download className="w-10 h-10 text-white" />
               </div>
@@ -325,23 +352,46 @@ export default function Index() {
         ) : (
           <>
             {/* Header */}
-            <header className="h-14 border-b bg-card flex items-center justify-between px-4 shrink-0 shadow-sm">
-              <div className="flex items-center gap-3 min-w-0">
+            <header className="h-14 border-b bg-card flex items-center justify-between px-2 sm:px-4 shrink-0 shadow-sm gap-2">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                {/* Mobile menu button */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="lg:hidden shrink-0 h-9 w-9"
+                  onClick={() => setSidebarOpen(true)}
+                >
+                  <Menu className="w-5 h-5" />
+                </Button>
+
                 <DatasetSelect datasets={safeDatasets} valueId={activeDataset.id} onChange={selectDataset} />
 
-                <span className="text-xs font-semibold bg-primary text-primary-foreground px-3 py-1 rounded-full shrink-0">
+                <span className="text-xs font-semibold bg-primary text-primary-foreground px-2 sm:px-3 py-1 rounded-full shrink-0 hidden sm:inline">
                   {filteredRows?.length ?? 0} registros
                 </span>
 
                 {hasActiveFilters && (
-                  <Button variant="ghost" size="sm" onClick={clearFilters} className="text-xs h-7">
+                  <Button variant="ghost" size="sm" onClick={clearFilters} className="text-xs h-7 hidden sm:flex">
                     Limpar Filtros
                   </Button>
                 )}
               </div>
 
-              {/* Tab Switcher */}
-              <ViewTabs value={activeTab} onChange={setActiveTab} />
+              <div className="flex items-center gap-1">
+                <ViewTabs value={activeTab} onChange={setActiveTab} />
+                {/* Right panel toggle - only on desktop when dashboard is active */}
+                {activeTab === "dashboard" && (matrixCandidateColumns?.length ?? 0) >= 1 && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="hidden xl:flex h-9 w-9 shrink-0"
+                    onClick={() => setRightPanelOpen(!rightPanelOpen)}
+                    title={rightPanelOpen ? "Ocultar painel" : "Mostrar painel"}
+                  >
+                    {rightPanelOpen ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
+                  </Button>
+                )}
+              </div>
             </header>
 
             {/* Auto Summary */}
@@ -365,10 +415,9 @@ export default function Index() {
         )}
       </main>
 
-      {/* RIGHT: Matrix + Detail Panel - Only show in Dashboard view if we have category data */}
-      {activeDataset && activeTab === "dashboard" && (matrixCandidateColumns?.length ?? 0) >= 1 && (
-        <aside className="w-[520px] shrink-0 border-l bg-white overflow-hidden flex flex-col shadow-sm">
-          {/* Matrix Table - parte superior */}
+      {/* RIGHT: Matrix + Detail Panel - hidden on mobile/tablet, toggleable on xl+ */}
+      {activeDataset && activeTab === "dashboard" && (matrixCandidateColumns?.length ?? 0) >= 1 && rightPanelOpen && (
+        <aside className="hidden xl:flex w-[520px] shrink-0 border-l bg-card overflow-hidden flex-col shadow-sm">
           <div className="h-[55%] border-b overflow-hidden">
             <MatrixTable 
               rows={filteredRows}
@@ -385,8 +434,6 @@ export default function Index() {
               }}
             />
           </div>
-
-          {/* Detail Table - parte inferior */}
           <div className="flex-1 overflow-hidden">
             <DetailTable
               rows={filteredRows}
@@ -398,6 +445,7 @@ export default function Index() {
           </div>
         </aside>
       )}
+
       {/* AI Chatbot */}
       <AIChatbot dataset={activeDataset} filtered={filteredRows} />
     </div>
