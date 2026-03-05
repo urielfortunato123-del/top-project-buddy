@@ -1,4 +1,5 @@
 import { get, set, del, keys, clear } from "idb-keyval";
+import type { ServiceProfile } from "./serviceProfile";
 
 // Tipos de dados detectados automaticamente
 export type ColumnType = "date" | "number" | "category" | "text" | "id";
@@ -48,6 +49,9 @@ export interface Dataset {
   
   // Configuração persistida da matriz
   matrixConfig?: MatrixConfig;
+
+  // Perfil de serviço detectado (heurística + IA)
+  serviceProfile?: ServiceProfile;
 }
 
 export interface DatasetSummary {
