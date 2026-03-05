@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { MessageCircle, X, Send, Loader2, Sparkles, Trash2 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -192,7 +193,13 @@ export function AIChatbot({ dataset, filtered }: AIChatbotProps) {
                     : "bg-muted text-foreground"
                 )}
               >
-                {msg.content}
+                {msg.role === "user" ? (
+                  msg.content
+                ) : (
+                  <div className="prose prose-sm dark:prose-invert max-w-none [&>p]:m-0 [&>ul]:m-0 [&>ol]:m-0 [&>table]:text-xs [&>table]:w-full">
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  </div>
+                )}
               </div>
             ))}
 
