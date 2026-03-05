@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { AIChatbot } from "@/components/dashboard/AIChatbot";
+import { AutoSummary } from "@/components/dashboard/AutoSummary";
 import { Download, Edit3 } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { DashboardView } from "@/components/dashboard/DashboardView";
@@ -342,6 +343,9 @@ export default function Index() {
               {/* Tab Switcher */}
               <ViewTabs value={activeTab} onChange={setActiveTab} />
             </header>
+
+            {/* Auto Summary */}
+            <AutoSummary dataset={activeDataset} filtered={filteredRows} />
 
             {/* Content based on active tab */}
             {activeTab === "dashboard" ? (
