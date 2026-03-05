@@ -9,12 +9,20 @@ import {
   setCurrentDatasetId,
 } from "@/lib/database";
 import { parseExcelFile, type ImportFormat } from "@/lib/excelParser";
+import { classifyDatasetHybrid } from "./useHybridClassification";
 
 export function useDatasets() {
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [currentDataset, setCurrentDataset] = useState<Dataset | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const updateDataset = useCallback((updatedDataset: Dataset) => {
+    setCurrentDataset(updatedDataset);
+    setDatasets((prev) => 
+      prev.map((d) => (d.id === updatedDataset.id ? updatedDataset : d))
+    );
+  }, []);
 
   const loadDatasets = useCallback(async () => {
     try {
@@ -56,6 +64,12 @@ export function useDatasets() {
       await setCurrentDatasetId(dataset.id);
       setCurrentDataset(dataset);
       setDatasets((prev) => [dataset, ...prev]);
+
+      // Run hybrid classification in background (local + AI if needed)
+      classifyDatasetHybrid(dataset, updateDataset).catch((err) =>
+        console.warn("Hybrid classification error:", err)
+      );
+
       return dataset;
     } catch (err) {
       setError("Erro ao importar arquivo");
@@ -64,7 +78,7 @@ export function useDatasets() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [updateDataset]);
 
   const selectDataset = useCallback(async (id: string) => {
     const dataset = await getDataset(id);
@@ -88,12 +102,6 @@ export function useDatasets() {
     }
   }, [currentDataset, datasets]);
 
-  const updateDataset = useCallback((updatedDataset: Dataset) => {
-    setCurrentDataset(updatedDataset);
-    setDatasets((prev) => 
-      prev.map((d) => (d.id === updatedDataset.id ? updatedDataset : d))
-    );
-  }, []);
 
   return {
     datasets,

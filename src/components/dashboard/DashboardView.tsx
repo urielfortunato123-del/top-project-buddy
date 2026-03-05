@@ -6,7 +6,7 @@ import {
   CheckCircle2, Clock, Coffee, Briefcase, AlertCircle
 } from "lucide-react";
 import type { Dataset, ColumnMetadata } from "@/lib/database";
-import { detectServiceProfile, buildServiceProfileContext, type ServiceProfile } from "@/lib/serviceProfile";
+import { detectServiceProfile, type ServiceProfile } from "@/lib/serviceProfile";
 import { KPICard } from "./KPICard";
 import { KPIDetailModal } from "./KPIDetailModal";
 import { Button } from "@/components/ui/button";
@@ -96,9 +96,10 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     return detectRDAType(safeSummary.categoryCounts || {});
   }, [safeSummary.categoryCounts]);
 
-  // Detecta perfil de serviço da planilha
+  // Use persisted profile or compute locally as fallback
   const serviceProfile = useMemo<ServiceProfile | null>(() => {
     if (!dataset) return null;
+    if (dataset.serviceProfile) return dataset.serviceProfile;
     return detectServiceProfile({
       name: dataset.name,
       columns: safeColumns.map(c => ({ name: c.name, uniqueValues: c.uniqueValues })),
