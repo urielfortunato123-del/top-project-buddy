@@ -14,7 +14,6 @@ interface AutoSummaryProps {
 function buildContext(dataset: Dataset): string {
   const lines: string[] = [];
 
-  // Detect service profile and prepend context
   const profile = detectServiceProfile({
     name: dataset.name,
     columns: dataset.columns?.map(c => ({ name: c.name, uniqueValues: c.uniqueValues })) ?? [],
@@ -49,10 +48,57 @@ function buildContext(dataset: Dataset): string {
     lines.push(`Colunas: ${dataset.columns.map(c => c.name).join(", ")}`);
   }
 
-  const sample = dataset.rows.slice(0, 15);
+  const sample = dataset.rows.slice(0, 8).map((row) => {
+    const clipped: Record<string, any> = {};
+    for (const [k, v] of Object.entries(row)) {
+      if (typeof v === "string" && v.length > 120) clipped[k] = `${v.slice(0, 120)}...`;
+      else clipped[k] = v;
+    }
+    return clipped;
+  });
+
   if (sample.length > 0) {
-    lines.push(`\nAmostra (${Math.min(15, dataset.rows.length)} linhas):`);
+    lines.push(`\nAmostra (${Math.min(8, dataset.rows.length)} linhas):`);
     lines.push(JSON.stringify(sample, null, 2));
+  }
+
+  return lines.join("\n");
+}
+
+function buildLocalSummary(dataset: Dataset): string {
+  const lines: string[] = [];
+  const profile = detectServiceProfile({
+    name: dataset.name,
+    columns: dataset.columns?.map(c => ({ name: c.name, uniqueValues: c.uniqueValues })) ?? [],
+    rows: dataset.rows,
+  });
+  const confidence = Math.round(profile.confidence * 100);
+
+  lines.push("- **Resumo local (fallback)**: a IA externa está temporariamente indisponível.");
+  lines.push(`- **Dataset**: ${dataset.name}`);
+  lines.push(`- **Total de registros**: ${dataset.totalRows}`);
+
+  if (profile.confidence > 0.35) {
+    lines.push(`- **Serviço detectado**: ${profile.domain} › ${profile.service} (${confidence}%)`);
+  }
+
+  if (dataset.summary?.dateRange) {
+    lines.push(`- **Período**: ${dataset.summary.dateRange.from} a ${dataset.summary.dateRange.to}`);
+  }
+
+  const topNumeric = Object.entries(dataset.summary?.numericStats ?? {})
+    .sort(([, a], [, b]) => b.sum - a.sum)
+    .slice(0, 2);
+
+  for (const [col, stats] of topNumeric) {
+    lines.push(`- **${col}**: média ${stats.avg.toFixed(1)} | min ${stats.min} | max ${stats.max}`);
+  }
+
+  const topCategory = Object.entries(dataset.summary?.categoryCounts ?? [])[0];
+  if (topCategory) {
+    const [col, counts] = topCategory;
+    const topValues = Object.entries(counts).sort(([, a], [, b]) => b - a).slice(0, 3);
+    lines.push(`- **Destaques em ${col}**: ${topValues.map(([k, v]) => `${k} (${v})`).join(", ")}`);
   }
 
   return lines.join("\n");
@@ -85,10 +131,16 @@ export function AutoSummary({ dataset, filtered }: AutoSummaryProps) {
       });
 
       if (error) throw error;
-      setSummary(data?.response || "Sem resumo disponível.");
+
+      if (data?.fallback) {
+        setSummary(buildLocalSummary(ds));
+        return;
+      }
+
+      setSummary(data?.response || buildLocalSummary(ds));
     } catch (err: any) {
       console.error("Auto-summary error:", err);
-      setSummary("Não foi possível gerar o resumo automático.");
+      setSummary(buildLocalSummary(ds));
     } finally {
       setLoading(false);
     }
