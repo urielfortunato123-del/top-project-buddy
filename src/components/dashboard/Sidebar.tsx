@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import { LayoutDashboard, FileSpreadsheet, Upload, Database, Settings, Trash2, CalendarIcon, X } from "lucide-react";
 import { format } from "date-fns";
+import { ThemePresetToggle } from "@/components/ThemePresetToggle";
 import { ptBR } from "date-fns/locale";
 import type { Dataset } from "@/lib/database";
 import type { DateRange } from "@/lib/dateRange";
@@ -266,15 +267,16 @@ export function Sidebar({
       )}
 
       {/* Footer */}
-      <div className="p-4 text-xs text-sidebar-muted border-t border-sidebar-border">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-            <span>PWA Offline Ready</span>
-          </div>
+      <div className="p-4 text-xs text-sidebar-muted border-t border-sidebar-border space-y-3">
+        <div className="flex items-center justify-between">
+          <ThemePresetToggle />
           <ThemeToggle />
         </div>
-        <p className="text-center text-[10px] text-sidebar-muted/70 mt-2">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+          <span>PWA Offline Ready</span>
+        </div>
+        <p className="text-center text-[10px] text-sidebar-muted/70">
           Desenvolvido por <span className="font-medium text-primary/80">Uriel da Fonseca Fortunato</span>
         </p>
       </div>
