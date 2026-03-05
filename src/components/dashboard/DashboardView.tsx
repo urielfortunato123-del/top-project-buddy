@@ -137,98 +137,40 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     return data;
   }, [dataset, safeRows, safeCategoryColumns, personFilter, statusFilter, teamFilter, dateRange]);
 
-  // KPIs específicos para RDA com listas detalhadas
-  const rdaKpis = useMemo(() => {
-    if (!rdaInfo.isRDA || !rdaInfo.statusColumn) return null;
-    
-    const statusCol = rdaInfo.statusColumn;
-    const personCol = rdaInfo.personColumn;
-    
-    // Conta status e coleta pessoas por status
+  // ── KPIs dinâmicos baseados no serviceProfile ──────────────────
+  const profileKpis = useMemo(() => {
+    if (!dataset) return { statusCounts: {} as Record<string, number>, uniquePeople: new Set<string>(), peopleByStatus: {} as Record<string, Set<string>>, total: 0 };
+
+    const statusCol = serviceProfile?.semanticMap?.status || rdaInfo.statusColumn;
+    const personCol = serviceProfile?.semanticMap?.person || rdaInfo.personColumn;
+    const dict = serviceProfile?.statusDictionary || {};
+
     const statusCounts: Record<string, number> = {};
     const uniquePeople = new Set<string>();
-    const peopleByStatus: Record<string, Set<string>> = {
-      entregue: new Set(),
-      pendencias: new Set(),
-      folga: new Set(),
-      banco: new Set(),
-      falta: new Set(),
-      atestado: new Set(),
-      ferias: new Set(),
-    };
-    
+    const peopleByStatus: Record<string, Set<string>> = {};
+
     for (const r of filtered) {
-      const status = String(r[statusCol] || "VAZIO").trim().toUpperCase();
-      statusCounts[status] = (statusCounts[status] || 0) + 1;
-      
+      // Status normalization via dictionary
+      let rawStatus = String(r[statusCol || ''] || '').trim().toLowerCase();
+      const normalizedStatus = dict[rawStatus] || rawStatus.toUpperCase() || 'VAZIO';
+      statusCounts[normalizedStatus] = (statusCounts[normalizedStatus] || 0) + 1;
+
       if (personCol) {
-        const person = String(r[personCol] || "").trim();
-        if (person && !/^(ENTREGUE?|FOLGA?|FALTA?|BANCO|ATESTADO?|FER[IÉ]AS?|VAZIO|-)$/i.test(person)) {
+        const person = String(r[personCol] || '').trim();
+        if (person && person !== '-' && person !== '') {
           uniquePeople.add(person);
-          
-          // Agrupa pessoas por status
-          if (status === "ENTREGUE" || status === "ENT") {
-            peopleByStatus.entregue.add(person);
-          } else if (status === "FOLGA" || status === "FOL") {
-            peopleByStatus.folga.add(person);
-          } else if (status === "BANCO DE HORAS" || status === "BANCO" || status === "BAN") {
-            peopleByStatus.banco.add(person);
-          } else if (status === "FALTA" || status === "FAL") {
-            peopleByStatus.falta.add(person);
-          } else if (status === "ATESTADO" || status === "ATE") {
-            peopleByStatus.atestado.add(person);
-          } else if (status === "FÉRIAS" || status === "FERIAS" || status === "FER") {
-            peopleByStatus.ferias.add(person);
-          } else if (status === "VAZIO" || status === "-" || status === "") {
-            peopleByStatus.pendencias.add(person);
-          }
+          if (!peopleByStatus[normalizedStatus]) peopleByStatus[normalizedStatus] = new Set();
+          peopleByStatus[normalizedStatus].add(person);
         }
       }
     }
-    
-    const total = filtered.length;
-    const entregue = (statusCounts["ENTREGUE"] || 0) + (statusCounts["ENT"] || 0);
-    const folga = (statusCounts["FOLGA"] || 0) + (statusCounts["FOL"] || 0);
-    const banco = (statusCounts["BANCO DE HORAS"] || 0) + (statusCounts["BANCO"] || 0) + (statusCounts["BAN"] || 0);
-    const falta = (statusCounts["FALTA"] || 0) + (statusCounts["FAL"] || 0);
-    const atestado = (statusCounts["ATESTADO"] || 0) + (statusCounts["ATE"] || 0);
-    const ferias = (statusCounts["FÉRIAS"] || 0) + (statusCounts["FERIAS"] || 0) + (statusCounts["FER"] || 0);
-    const vazio = (statusCounts["VAZIO"] || 0) + (statusCounts["-"] || 0) + (statusCounts[""] || 0);
-    
-    const taxaEntrega = total > 0 ? Math.round((entregue / total) * 100) : 0;
-    const pendencias = total - entregue - folga - banco - falta - atestado - ferias;
-    
-    // Converte sets para arrays
-    const toDetailList = (set: Set<string>) => 
-      Array.from(set).sort().map(name => ({ name }));
-    
-    return {
-      taxaEntrega,
-      entregue,
-      pendencias: pendencias > 0 ? pendencias : vazio,
-      folga,
-      banco,
-      falta,
-      atestado,
-      ferias,
-      pessoas: uniquePeople.size,
-      total,
-      // Listas detalhadas
-      peopleList: toDetailList(uniquePeople),
-      entregueList: toDetailList(peopleByStatus.entregue),
-      pendenciasList: toDetailList(peopleByStatus.pendencias),
-      folgaList: toDetailList(peopleByStatus.folga),
-      bancoList: toDetailList(peopleByStatus.banco),
-      faltaList: toDetailList(peopleByStatus.falta),
-      atestadoList: toDetailList(peopleByStatus.atestado),
-      feriasList: toDetailList(peopleByStatus.ferias),
-    };
-  }, [filtered, rdaInfo]);
 
-  // Gera KPIs dinâmicos
+    return { statusCounts, uniquePeople, peopleByStatus, total: filtered.length };
+  }, [filtered, serviceProfile, rdaInfo]);
+
   const kpis = useMemo(() => {
-    if (!dataset) return [];
-    
+    if (!dataset || !serviceProfile) return [];
+
     const result: Array<{
       title: string;
       value: string;
@@ -243,134 +185,163 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
       percentage?: number;
       detailList?: Array<{ name: string; detail?: string }>;
     }> = [];
-    
-    // Se for RDA, usa KPIs específicos
-    if (rdaKpis) {
+
+    const includes = serviceProfile.kpiProfile.include;
+    const labels = serviceProfile.labels;
+    const { statusCounts, uniquePeople, peopleByStatus, total } = profileKpis;
+    const toList = (s?: Set<string>) => Array.from(s || []).sort().map(name => ({ name }));
+
+    // ── Primary rate KPI ──
+    if (serviceProfile.kpiProfile.primaryRate !== 'none') {
+      let rateValue = 0;
+      let rateCount = 0;
+
+      if (serviceProfile.kpiProfile.primaryRate === 'delivery_rate') {
+        rateCount = (statusCounts['ENT'] || 0) + (statusCounts['ENTREGUE'] || 0);
+        rateValue = total > 0 ? Math.round((rateCount / total) * 100) : 0;
+      } else if (serviceProfile.kpiProfile.primaryRate === 'conformity_rate') {
+        rateCount = (statusCounts['SIM'] || 0) + (statusCounts['OK'] || 0);
+        rateValue = total > 0 ? Math.round((rateCount / total) * 100) : 0;
+      } else if (serviceProfile.kpiProfile.primaryRate === 'non_empty_rate') {
+        const empty = (statusCounts['VAZIO'] || 0) + (statusCounts['-'] || 0) + (statusCounts[''] || 0);
+        rateCount = total - empty;
+        rateValue = total > 0 ? Math.round((rateCount / total) * 100) : 0;
+      }
+
       result.push({
-        title: "Taxa de Entrega",
-        value: `${rdaKpis.taxaEntrega}%`,
-        subtitle: `${rdaKpis.entregue} de ${rdaKpis.total} registros`,
+        title: labels.primaryRateLabel,
+        value: `${rateValue}%`,
+        subtitle: `${rateCount} de ${total} registros`,
         icon: <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-primary" />,
         variant: "default",
         type: "count",
-        total: rdaKpis.total,
-        percentage: rdaKpis.taxaEntrega,
-        detailList: rdaKpis.entregueList,
+        total,
+        percentage: rateValue,
       });
-      
+    }
+
+    // ── Total records ──
+    if (includes.includes('total_records')) {
+      result.push({
+        title: labels.totalLabel,
+        value: total.toLocaleString("pt-BR"),
+        subtitle: `de ${dataset.totalRows} no arquivo`,
+        icon: <Database className="w-4 h-4 md:w-5 md:h-5 text-primary" />,
+        variant: "default",
+        type: "count",
+        total: dataset.totalRows,
+      });
+    }
+
+    // ── Delivered total ──
+    if (includes.includes('delivered_total')) {
+      const delivered = (statusCounts['ENT'] || 0) + (statusCounts['ENTREGUE'] || 0);
       result.push({
         title: "Total Entregue",
-        value: rdaKpis.entregue.toLocaleString("pt-BR"),
-        subtitle: `${rdaKpis.entregueList.length} colaboradores`,
+        value: delivered.toLocaleString("pt-BR"),
+        subtitle: `${toList(peopleByStatus['ENT'] || peopleByStatus['ENTREGUE']).length} colaboradores`,
         icon: <CheckCircle2 className="w-4 h-4 md:w-5 md:h-5 text-primary" />,
         variant: "success",
         type: "count",
-        detailList: rdaKpis.entregueList,
+        detailList: toList(new Set([...(peopleByStatus['ENT'] || []), ...(peopleByStatus['ENTREGUE'] || [])])),
       });
-      
+    }
+
+    // ── Pending total ──
+    if (includes.includes('pending_total') && labels.pendingLabel) {
+      const empty = (statusCounts['VAZIO'] || 0) + (statusCounts['-'] || 0) + (statusCounts[''] || 0);
+      const nonConf = (statusCounts['NAO'] || 0) + (statusCounts['NOK'] || 0);
+      const pending = Math.max(empty, nonConf);
       result.push({
-        title: "Pendências",
-        value: rdaKpis.pendencias.toLocaleString("pt-BR"),
-        subtitle: `${rdaKpis.pendenciasList.length} colaboradores`,
+        title: labels.pendingLabel,
+        value: pending.toLocaleString("pt-BR"),
+        subtitle: `registros pendentes/NC`,
         icon: <AlertCircle className="w-4 h-4 md:w-5 md:h-5 text-secondary" />,
         variant: "warning",
         type: "count",
-        detailList: rdaKpis.pendenciasList,
+        detailList: toList(new Set([...(peopleByStatus['VAZIO'] || []), ...(peopleByStatus['NAO'] || []), ...(peopleByStatus['NOK'] || [])])),
       });
-      
+    }
+
+    // ── Folga / Banco / Falta (RDA-specific) ──
+    if (includes.includes('folga_total')) {
+      const folga = (statusCounts['FOL'] || 0) + (statusCounts['FOLGA'] || 0);
       result.push({
         title: "Folgas",
-        value: rdaKpis.folga.toLocaleString("pt-BR"),
-        subtitle: `${rdaKpis.folgaList.length} colaboradores`,
+        value: folga.toLocaleString("pt-BR"),
+        subtitle: `${toList(peopleByStatus['FOL'] || peopleByStatus['FOLGA']).length} colaboradores`,
         icon: <Coffee className="w-4 h-4 md:w-5 md:h-5 text-accent" />,
         variant: "info",
         type: "count",
-        detailList: rdaKpis.folgaList,
+        detailList: toList(new Set([...(peopleByStatus['FOL'] || []), ...(peopleByStatus['FOLGA'] || [])])),
       });
-      
+    }
+
+    if (includes.includes('banco_total')) {
+      const banco = (statusCounts['BAN'] || 0) + (statusCounts['BANCO'] || 0) + (statusCounts['BANCO DE HORAS'] || 0);
       result.push({
         title: "Banco de Horas",
-        value: rdaKpis.banco.toLocaleString("pt-BR"),
-        subtitle: `${rdaKpis.bancoList.length} colaboradores`,
+        value: banco.toLocaleString("pt-BR"),
+        subtitle: `colaboradores`,
         icon: <Clock className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />,
         variant: "default",
         type: "count",
-        detailList: rdaKpis.bancoList,
+        detailList: toList(new Set([...(peopleByStatus['BAN'] || []), ...(peopleByStatus['BANCO'] || []), ...(peopleByStatus['BANCO DE HORAS'] || [])])),
       });
-      
+    }
+
+    // ── Unique people ──
+    if (includes.includes('unique_people') && labels.peopleLabel) {
       result.push({
-        title: "Pessoas",
-        value: rdaKpis.pessoas.toLocaleString("pt-BR"),
-        subtitle: "Colaboradores únicos",
+        title: labels.peopleLabel,
+        value: uniquePeople.size.toLocaleString("pt-BR"),
+        subtitle: "únicos detectados",
         icon: <Users className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />,
         variant: "default",
         type: "count",
-        detailList: rdaKpis.peopleList,
+        detailList: toList(uniquePeople),
       });
-      
-      return result;
     }
-    
-    // KPIs genéricos para outras planilhas
-    const filteredCount = filtered?.length ?? 0;
-    const totalCount = dataset.totalRows ?? 0;
-    result.push({
-      title: "Total Registros",
-      value: filteredCount.toLocaleString("pt-BR"),
-      subtitle: `de ${totalCount} no arquivo`,
-      icon: <Database className="w-4 h-4 md:w-5 md:h-5 text-primary" />,
-      variant: "default",
-      type: "count",
-      total: totalCount,
-      percentage: totalCount > 0 ? (filteredCount / totalCount) * 100 : 100,
-    });
-    
-    // KPIs para cada coluna numérica (soma e média)
-    for (const colName of safeNumericColumns.slice(0, 2)) {
-      const stats = safeSummary.numericStats?.[colName];
-      if (stats) {
-        result.push({
-          title: `Soma ${colName}`,
-          value: stats.sum.toLocaleString("pt-BR", { maximumFractionDigits: 2 }),
-          subtitle: `Média: ${stats.avg.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}`,
-          icon: <Hash className="w-4 h-4 md:w-5 md:h-5 text-accent" />,
-          variant: "info",
-          type: "numeric",
-          columnName: colName,
-          stats: {
-            min: stats.min,
-            max: stats.max,
-            avg: stats.avg,
-            sum: stats.sum,
-          },
-        });
+
+    // ── Conformity-specific: empty rate ──
+    if (includes.includes('empty_rate')) {
+      const empty = (statusCounts['VAZIO'] || 0) + (statusCounts['-'] || 0) + (statusCounts[''] || 0);
+      const rate = total > 0 ? Math.round((empty / total) * 100) : 0;
+      result.push({
+        title: "% Vazios",
+        value: `${rate}%`,
+        subtitle: `${empty} campos vazios`,
+        icon: <Layers className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />,
+        variant: rate > 30 ? "danger" : "default",
+        type: "count",
+        percentage: rate,
+      });
+    }
+
+    // ── Top categories / observations ──
+    if (includes.includes('top_categories') || includes.includes('top_observations')) {
+      const catCol = serviceProfile.semanticMap.observation || safeCategoryColumns[0];
+      if (catCol) {
+        const counts = safeSummary.categoryCounts?.[catCol];
+        if (counts) {
+          const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+          const topValue = entries[0];
+          result.push({
+            title: catCol,
+            value: entries.length.toLocaleString("pt-BR"),
+            subtitle: topValue ? `Top: ${topValue[0]} (${topValue[1]})` : "valores únicos",
+            icon: <Tag className="w-4 h-4 md:w-5 md:h-5 text-secondary" />,
+            variant: "warning",
+            type: "category",
+            columnName: catCol,
+            distribution: entries.map(([name, value]) => ({ name, value })),
+          });
+        }
       }
     }
-    
-    // KPIs para colunas de categoria (contagem de valores únicos)
-    for (const colName of safeCategoryColumns.slice(0, 3)) {
-      const counts = safeSummary.categoryCounts?.[colName];
-      if (counts) {
-        const entries = Object.entries(counts) as [string, number][];
-        const sortedEntries = [...entries].sort((a, b) => b[1] - a[1]);
-        const uniqueCount = entries.length;
-        const topValue = sortedEntries[0];
-        
-        result.push({
-          title: colName,
-          value: uniqueCount.toLocaleString("pt-BR"),
-          subtitle: topValue ? `Top: ${topValue[0]} (${topValue[1]})` : "valores únicos",
-          icon: <Tag className="w-4 h-4 md:w-5 md:h-5 text-secondary" />,
-          variant: "warning",
-          type: "category",
-          columnName: colName,
-          distribution: sortedEntries.map(([name, value]) => ({ name, value })),
-        });
-      }
-    }
-    
-    // KPI: Data range se existir
-    if (safeSummary.dateRange) {
+
+    // ── Date range ──
+    if (includes.includes('date_range') && safeSummary.dateRange) {
       result.push({
         title: "Período",
         value: `${safeSummary.dateRange.from?.slice(5) ?? ''} a ${safeSummary.dateRange.to?.slice(5) ?? ''}`,
@@ -381,9 +352,28 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
         columnName: dataset.detectedDateColumn,
       });
     }
-    
-    return result.slice(0, 6); // Máximo 6 KPIs
-  }, [dataset, filtered, rdaKpis, safeNumericColumns, safeCategoryColumns, safeSummary]);
+
+    // ── Numeric stats (generic fallback) ──
+    if (includes.includes('unique_entities') || serviceProfile.kpiProfile.primaryRate === 'none') {
+      for (const colName of safeNumericColumns.slice(0, 2)) {
+        const stats = safeSummary.numericStats?.[colName];
+        if (stats) {
+          result.push({
+            title: `Soma ${colName}`,
+            value: stats.sum.toLocaleString("pt-BR", { maximumFractionDigits: 2 }),
+            subtitle: `Média: ${stats.avg.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}`,
+            icon: <Hash className="w-4 h-4 md:w-5 md:h-5 text-accent" />,
+            variant: "info",
+            type: "numeric",
+            columnName: colName,
+            stats: { min: stats.min, max: stats.max, avg: stats.avg, sum: stats.sum },
+          });
+        }
+      }
+    }
+
+    return result.slice(0, 8);
+  }, [dataset, serviceProfile, profileKpis, safeNumericColumns, safeCategoryColumns, safeSummary]);
 
   const handleKPIClick = (kpi: typeof kpis[0]) => {
     setSelectedKPI(kpi);
