@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { MessageCircle, X, Send, Loader2, Sparkles, Trash2 } from "lucide-react";
+import { X, Send, Loader2, Sparkles, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
 import type { Dataset } from "@/lib/database";
 
 interface Message {
@@ -18,20 +17,18 @@ interface AIChatbotProps {
 
 function buildDataContext(dataset: Dataset | null, filtered?: Record<string, any>[]): string {
   if (!dataset) return "";
-
   const rows = filtered ?? dataset.rows;
   const lines: string[] = [];
   lines.push(`Dataset: ${dataset.name}`);
   lines.push(`Total de linhas: ${rows.length}`);
-  
   if (dataset.summary) {
     const s = dataset.summary;
     lines.push(`Total de registros: ${s.totalRecords}`);
     if (s.dateRange) lines.push(`Período: ${s.dateRange.from} a ${s.dateRange.to}`);
     if (s.categoryCounts) {
       for (const [col, counts] of Object.entries(s.categoryCounts)) {
-        const top = Object.entries(counts).sort(([,a],[,b]) => b - a).slice(0, 5);
-        lines.push(`${col}: ${top.map(([k,v]) => `${k}(${v})`).join(", ")}`);
+        const top = Object.entries(counts).sort(([, a], [, b]) => b - a).slice(0, 5);
+        lines.push(`${col}: ${top.map(([k, v]) => `${k}(${v})`).join(", ")}`);
       }
     }
     if (s.numericStats) {
@@ -40,20 +37,18 @@ function buildDataContext(dataset: Dataset | null, filtered?: Record<string, any
       }
     }
   }
-
   if (dataset.columns) {
-    lines.push(`Colunas: ${dataset.columns.map(c => c.name).join(", ")}`);
+    lines.push(`Colunas: ${dataset.columns.map((c) => c.name).join(", ")}`);
   }
-
-  // Sample of data (first 20 rows max)
   const sample = rows.slice(0, 20);
   if (sample.length > 0) {
     lines.push(`\nAmostra dos dados (${Math.min(20, rows.length)} de ${rows.length} linhas):`);
     lines.push(JSON.stringify(sample, null, 2));
   }
-
   return lines.join("\n");
 }
+
+const STREAM_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
 
 export function AIChatbot({ dataset, filtered }: AIChatbotProps) {
   const [open, setOpen] = useState(false);
@@ -78,19 +73,87 @@ export function AIChatbot({ dataset, filtered }: AIChatbotProps) {
     setInput("");
     setLoading(true);
 
+    let assistantSoFar = "";
+
+    const upsertAssistant = (chunk: string) => {
+      assistantSoFar += chunk;
+      const content = assistantSoFar;
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.role === "assistant") {
+          return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content } : m));
+        }
+        return [...prev, { role: "assistant", content }];
+      });
+    };
+
     try {
       const dataContext = buildDataContext(dataset, filtered);
-      const { data, error } = await supabase.functions.invoke("ai-chat", {
-        body: { messages: newMessages, dataContext },
+      const resp = await fetch(STREAM_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ messages: newMessages, dataContext, stream: true }),
       });
 
-      if (error) throw error;
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({ error: "Erro desconhecido" }));
+        throw new Error(errData.error || `Erro ${resp.status}`);
+      }
 
-      const assistantMsg: Message = {
-        role: "assistant",
-        content: data?.response || "Sem resposta.",
-      };
-      setMessages((prev) => [...prev, assistantMsg]);
+      if (!resp.body) throw new Error("Sem corpo na resposta");
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let newlineIdx: number;
+        while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
+          let line = buffer.slice(0, newlineIdx);
+          buffer = buffer.slice(newlineIdx + 1);
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (line.startsWith(":") || line.trim() === "") continue;
+          if (!line.startsWith("data: ")) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") break;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            if (parsed.token) upsertAssistant(parsed.token);
+          } catch {
+            // partial JSON, wait for more
+            buffer = line + "\n" + buffer;
+            break;
+          }
+        }
+      }
+
+      // Flush remaining
+      if (buffer.trim()) {
+        for (let raw of buffer.split("\n")) {
+          if (!raw) continue;
+          if (raw.endsWith("\r")) raw = raw.slice(0, -1);
+          if (!raw.startsWith("data: ")) continue;
+          const jsonStr = raw.slice(6).trim();
+          if (jsonStr === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            if (parsed.token) upsertAssistant(parsed.token);
+          } catch { /* ignore */ }
+        }
+      }
+
+      if (!assistantSoFar) {
+        upsertAssistant("Sem resposta.");
+      }
     } catch (err: any) {
       console.error("AI Chat error:", err);
       setMessages((prev) => [
@@ -111,7 +174,6 @@ export function AIChatbot({ dataset, filtered }: AIChatbotProps) {
 
   return (
     <>
-      {/* Floating Button */}
       {!open && (
         <button
           onClick={() => setOpen(true)}
@@ -121,37 +183,23 @@ export function AIChatbot({ dataset, filtered }: AIChatbotProps) {
         </button>
       )}
 
-      {/* Chat Panel */}
       {open && (
         <div className="fixed bottom-6 right-6 z-50 w-[380px] h-[520px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-          {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/50">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-primary" />
               <span className="font-semibold text-sm">Assistente IA</span>
             </div>
             <div className="flex gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => setMessages([])}
-                title="Limpar conversa"
-              >
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMessages([])} title="Limpar conversa">
                 <Trash2 className="w-3.5 h-3.5" />
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => setOpen(false)}
-              >
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOpen(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
           </div>
 
-          {/* Messages */}
           <div ref={scrollRef} className="flex-1 overflow-auto p-4 space-y-3">
             {messages.length === 0 && (
               <div className="text-center text-muted-foreground text-sm mt-8 space-y-2">
@@ -165,14 +213,10 @@ export function AIChatbot({ dataset, filtered }: AIChatbotProps) {
                 {dataset && (
                   <div className="mt-4 space-y-1.5">
                     <p className="text-xs text-muted-foreground">Sugestões:</p>
-                    {[
-                      "Faça um resumo dos dados",
-                      "Qual a taxa de entrega?",
-                      "Quem mais entregou?",
-                    ].map((s) => (
+                    {["Faça um resumo dos dados", "Qual a taxa de entrega?", "Quem mais entregou?"].map((s) => (
                       <button
                         key={s}
-                        onClick={() => { setInput(s); }}
+                        onClick={() => setInput(s)}
                         className="block w-full text-left text-xs px-3 py-1.5 rounded-lg bg-muted hover:bg-accent transition-colors"
                       >
                         {s}
@@ -187,9 +231,9 @@ export function AIChatbot({ dataset, filtered }: AIChatbotProps) {
               <div
                 key={i}
                 className={cn(
-                  "max-w-[85%] px-3 py-2 rounded-xl text-sm whitespace-pre-wrap",
+                  "max-w-[85%] px-3 py-2 rounded-xl text-sm",
                   msg.role === "user"
-                    ? "ml-auto bg-primary text-primary-foreground"
+                    ? "ml-auto bg-primary text-primary-foreground whitespace-pre-wrap"
                     : "bg-muted text-foreground"
                 )}
               >
@@ -203,7 +247,7 @@ export function AIChatbot({ dataset, filtered }: AIChatbotProps) {
               </div>
             ))}
 
-            {loading && (
+            {loading && messages[messages.length - 1]?.role !== "assistant" && (
               <div className="flex items-center gap-2 text-muted-foreground text-sm">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 <span>Pensando...</span>
@@ -211,7 +255,6 @@ export function AIChatbot({ dataset, filtered }: AIChatbotProps) {
             )}
           </div>
 
-          {/* Input */}
           <div className="p-3 border-t border-border">
             <div className="flex gap-2">
               <input
@@ -222,12 +265,7 @@ export function AIChatbot({ dataset, filtered }: AIChatbotProps) {
                 className="flex-1 bg-muted rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/50 placeholder:text-muted-foreground"
                 disabled={loading}
               />
-              <Button
-                size="icon"
-                className="h-9 w-9 shrink-0"
-                onClick={sendMessage}
-                disabled={loading || !input.trim()}
-              >
+              <Button size="icon" className="h-9 w-9 shrink-0" onClick={sendMessage} disabled={loading || !input.trim()}>
                 <Send className="w-4 h-4" />
               </Button>
             </div>
