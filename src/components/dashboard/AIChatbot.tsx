@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Dataset } from "@/lib/database";
+import { detectSector, extractSampleValues, buildSectorContext } from "@/lib/sectorDetection";
 
 interface Message {
   role: "user" | "assistant";
@@ -19,6 +20,17 @@ function buildDataContext(dataset: Dataset | null, filtered?: Record<string, any
   if (!dataset) return "";
   const rows = filtered ?? dataset.rows;
   const lines: string[] = [];
+
+  // Detect sector and prepend context
+  const colNames = dataset.columns?.map(c => c.name) ?? [];
+  const sampleVals = extractSampleValues(dataset.rows, colNames, 50);
+  const sectorResult = detectSector(colNames, sampleVals);
+  if (sectorResult) {
+    lines.push("=== SETOR DETECTADO ===");
+    lines.push(buildSectorContext(sectorResult));
+    lines.push("========================\n");
+  }
+
   lines.push(`Dataset: ${dataset.name}`);
   lines.push(`Total de linhas: ${rows.length}`);
   if (dataset.summary) {
