@@ -663,11 +663,24 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           
           {/* Quick stats badges */}
           <div className="hidden md:flex items-center gap-2">
-            {serviceProfile && serviceProfile.confidence > 0.35 && (
-              <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full" title={`Confiança: ${Math.round(serviceProfile.confidence * 100)}% | ${serviceProfile.signals.matchedKeywords.join(', ')}`}>
-                🏷️ {serviceProfile.domain} › {serviceProfile.service}
-              </span>
-            )}
+            {serviceProfile && serviceProfile.confidence > 0.35 && (() => {
+              const isAiRefined = serviceProfile.signals.notes.some(n => n.includes("Refinado por IA"));
+              const isFallback = serviceProfile.signals.notes.some(n => n.includes("Fallback"));
+              const sourceIcon = isAiRefined ? "🤖" : "📐";
+              const sourceLabel = isAiRefined ? "IA" : "Local";
+              const confPct = Math.round(serviceProfile.confidence * 100);
+              return (
+                <span
+                  className="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full flex items-center gap-1.5"
+                  title={`Confiança: ${confPct}% • Fonte: ${isAiRefined ? "Refinado por IA" : "Heurística local"} | ${serviceProfile.signals.matchedKeywords.join(', ')}`}
+                >
+                  🏷️ {serviceProfile.domain} › {serviceProfile.service}
+                  <span className={`ml-1 px-1.5 py-0.5 rounded text-[9px] font-semibold ${isAiRefined ? 'bg-accent/20 text-accent-foreground' : 'bg-muted text-muted-foreground'}`}>
+                    {sourceIcon} {sourceLabel} {confPct}%
+                  </span>
+                </span>
+              );
+            })()}
             {rdaInfo.isRDA && (
               <span className="px-3 py-1 bg-secondary/10 text-secondary text-xs font-bold rounded-full">
                 📋 RDA
