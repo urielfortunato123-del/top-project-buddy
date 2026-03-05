@@ -7,7 +7,7 @@ import {
   BarChart, Bar, Area, AreaChart, ReferenceLine,
 } from "recharts";
 import type { Dataset } from "@/lib/database";
-import { detectSector, extractSampleValues, buildSectorContext } from "@/lib/sectorDetection";
+import { detectServiceProfile, buildServiceProfileContext } from "@/lib/serviceProfile";
 
 interface PredictiveAnalysisProps {
   dataset: Dataset | null;
@@ -25,14 +25,15 @@ interface PredictionData {
 function buildAnalysisContext(dataset: Dataset): string {
   const lines: string[] = [];
 
-  // Detect sector
-  const colNames = dataset.columns?.map(c => c.name) ?? [];
-  const sampleVals = extractSampleValues(dataset.rows, colNames, 50);
-  const sectorResult = detectSector(colNames, sampleVals);
-  if (sectorResult) {
-    lines.push("=== SETOR DETECTADO ===");
-    lines.push(buildSectorContext(sectorResult));
-    lines.push("========================\n");
+  // Detect service profile
+  const profile = detectServiceProfile({
+    name: dataset.name,
+    columns: dataset.columns?.map(c => ({ name: c.name, uniqueValues: c.uniqueValues })) ?? [],
+    rows: dataset.rows,
+  });
+  if (profile.confidence > 0.35) {
+    lines.push(buildServiceProfileContext(profile));
+    lines.push("");
   }
 
   lines.push(`Dataset: ${dataset.name}`);

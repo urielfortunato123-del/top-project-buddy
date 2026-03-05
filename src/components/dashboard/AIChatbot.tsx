@@ -4,7 +4,7 @@ import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Dataset } from "@/lib/database";
-import { detectSector, extractSampleValues, buildSectorContext } from "@/lib/sectorDetection";
+import { detectServiceProfile, buildServiceProfileContext } from "@/lib/serviceProfile";
 
 interface Message {
   role: "user" | "assistant";
@@ -21,14 +21,15 @@ function buildDataContext(dataset: Dataset | null, filtered?: Record<string, any
   const rows = filtered ?? dataset.rows;
   const lines: string[] = [];
 
-  // Detect sector and prepend context
-  const colNames = dataset.columns?.map(c => c.name) ?? [];
-  const sampleVals = extractSampleValues(dataset.rows, colNames, 50);
-  const sectorResult = detectSector(colNames, sampleVals);
-  if (sectorResult) {
-    lines.push("=== SETOR DETECTADO ===");
-    lines.push(buildSectorContext(sectorResult));
-    lines.push("========================\n");
+  // Detect service profile and prepend context
+  const profile = detectServiceProfile({
+    name: dataset.name,
+    columns: dataset.columns?.map(c => ({ name: c.name, uniqueValues: c.uniqueValues })) ?? [],
+    rows: dataset.rows,
+  });
+  if (profile.confidence > 0.35) {
+    lines.push(buildServiceProfileContext(profile));
+    lines.push("");
   }
 
   lines.push(`Dataset: ${dataset.name}`);

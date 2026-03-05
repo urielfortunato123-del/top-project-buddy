@@ -6,7 +6,7 @@ import {
   CheckCircle2, Clock, Coffee, Briefcase, AlertCircle
 } from "lucide-react";
 import type { Dataset, ColumnMetadata } from "@/lib/database";
-import { detectSector, extractSampleValues, buildSectorContext, type SectorDetectionResult } from "@/lib/sectorDetection";
+import { detectServiceProfile, buildServiceProfileContext, type ServiceProfile } from "@/lib/serviceProfile";
 import { KPICard } from "./KPICard";
 import { KPIDetailModal } from "./KPIDetailModal";
 import { Button } from "@/components/ui/button";
@@ -96,12 +96,14 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
     return detectRDAType(safeSummary.categoryCounts || {});
   }, [safeSummary.categoryCounts]);
 
-  // Detecta setor da planilha
-  const sectorInfo = useMemo<SectorDetectionResult | null>(() => {
+  // Detecta perfil de serviço da planilha
+  const serviceProfile = useMemo<ServiceProfile | null>(() => {
     if (!dataset) return null;
-    const colNames = safeColumns.map(c => c.name);
-    const sampleVals = extractSampleValues(safeRows, colNames, 50);
-    return detectSector(colNames, sampleVals);
+    return detectServiceProfile({
+      name: dataset.name,
+      columns: safeColumns.map(c => ({ name: c.name, uniqueValues: c.uniqueValues })),
+      rows: safeRows,
+    });
   }, [dataset, safeColumns, safeRows]);
 
   // Filtra dados baseado nos filtros ativos
@@ -670,9 +672,9 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
           
           {/* Quick stats badges */}
           <div className="hidden md:flex items-center gap-2">
-            {sectorInfo && (
-              <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full" title={`Confiança: ${sectorInfo.confidence}% | Palavras: ${sectorInfo.matchedKeywords.join(', ')}`}>
-                {sectorInfo.icon} {sectorInfo.label}
+            {serviceProfile && serviceProfile.confidence > 0.35 && (
+              <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full" title={`Confiança: ${Math.round(serviceProfile.confidence * 100)}% | ${serviceProfile.signals.matchedKeywords.join(', ')}`}>
+                🏷️ {serviceProfile.domain} › {serviceProfile.service}
               </span>
             )}
             {rdaInfo.isRDA && (
