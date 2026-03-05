@@ -422,9 +422,9 @@ export default function Index() {
             <MatrixTable 
               rows={filteredRows}
               domainRows={activeDataset.rows}
-              rowColumn={activeDataset.matrixConfig?.rowColumn || findBestPersonColumn(matrixCandidateColumns, activeDataset.rows)}
-              colColumn={activeDataset.matrixConfig?.colColumn || findDateColumn(matrixCandidateColumns, activeDataset.rows, activeDataset.detectedDateColumn)}
-              valueColumn={activeDataset.matrixConfig?.valueColumn || findStatusColumn(matrixCandidateColumns, activeDataset.rows) || matrixCandidateColumns[0]}
+              rowColumn={activeDataset.matrixConfig?.rowColumn || activeDataset.serviceProfile?.matrixDefaults?.rowKey || findBestPersonColumn(matrixCandidateColumns, activeDataset.rows)}
+              colColumn={activeDataset.matrixConfig?.colColumn || activeDataset.serviceProfile?.matrixDefaults?.colKey || findDateColumn(matrixCandidateColumns, activeDataset.rows, activeDataset.detectedDateColumn)}
+              valueColumn={activeDataset.matrixConfig?.valueColumn || activeDataset.serviceProfile?.matrixDefaults?.valueKey || findStatusColumn(matrixCandidateColumns, activeDataset.rows) || matrixCandidateColumns[0]}
               availableColumns={activeDataset.columns?.map(c => typeof c === 'string' ? c : c.name) || []}
               onColumnsChange={async (row, col, value) => {
                 const newConfig: MatrixConfig = { rowColumn: row, colColumn: col, valueColumn: value };
