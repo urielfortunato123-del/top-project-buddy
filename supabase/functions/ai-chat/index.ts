@@ -6,23 +6,60 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+type ChatMessage = { role: "user" | "assistant" | "system"; content: string };
 
-  try {
-    const GOOGLE_API_KEY = Deno.env.get("GOOGLE_AI_STUDIO_API_KEY");
-    if (!GOOGLE_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: "GOOGLE_AI_STUDIO_API_KEY is not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+function buildClassificationFallbackJson() {
+  return JSON.stringify({
+    type: "GENERIC",
+    confidence: 0.35,
+    domain: "Genérico",
+    service: "Análise Geral",
+    semanticMap: {
+      date: null,
+      person: null,
+      team: null,
+      status: null,
+      observation: null,
+      initial: null,
+      final: null,
+      km: null,
+      side: null,
+    },
+    labels: {
+      primaryRateLabel: "Indicador Principal",
+      totalLabel: "Total de Registros",
+      pendingLabel: null,
+      peopleLabel: null,
+    },
+    kpiProfile: {
+      primaryRate: "none",
+      include: ["total_records", "top_categories", "date_range"],
+    },
+    reason: ["Fallback aplicado por indisponibilidade temporária da IA"],
+  });
+}
 
-    const { messages, dataContext, stream: wantStream } = await req.json();
+function buildFallbackText(messages: ChatMessage[]) {
+  const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  const isClassification = /OUTPUT JSON|classificador de planilhas|schema\)/i.test(lastUser);
+  if (isClassification) return buildClassificationFallbackJson();
+  return "No momento estou com indisponibilidade temporária de IA. A heurística local continuará funcionando normalmente.";
+}
 
-    const systemPrompt = `Você é um assistente de análise de dados especializado em entregas e produtividade de equipes. 
+function sseDoneResponse(text: string) {
+  const payload = `data: ${JSON.stringify({ token: text })}\n\ndata: [DONE]\n\n`;
+  return new Response(payload, {
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
+}
+
+function buildSystemPrompt(dataContext?: string) {
+  return `Você é um assistente de análise de dados especializado em produtividade e classificação de planilhas.
 Responda sempre em português brasileiro. Seja conciso e direto.
 
 ${dataContext ? `Contexto dos dados atuais:\n${dataContext}` : "Nenhum dado carregado no momento."}
@@ -32,54 +69,69 @@ Você pode:
 - Fazer resumos e insights
 - Responder perguntas sobre produtividade
 - Sugerir melhorias baseadas nos dados
-- Fazer análises preditivas simples`;
+- Fazer análises preditivas simples
+- Classificar planilhas por domínio/serviço quando solicitado`;
+}
 
-    const contents = [];
-    contents.push({ role: "user", parts: [{ text: systemPrompt }] });
-    contents.push({ role: "model", parts: [{ text: "Entendido! Estou pronto para analisar seus dados. Como posso ajudar?" }] });
+function toOpenAIMessages(messages: ChatMessage[], dataContext?: string) {
+  return [
+    { role: "system", content: buildSystemPrompt(dataContext) },
+    ...messages.map((m) => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: m.content,
+    })),
+  ];
+}
 
-    for (const msg of messages) {
-      contents.push({
-        role: msg.role === "user" ? "user" : "model",
-        parts: [{ text: msg.content }],
-      });
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  try {
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      return new Response(
+        JSON.stringify({ error: "LOVABLE_API_KEY is not configured" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    const generationConfig = {
-      temperature: 0.7,
-      topP: 0.95,
-      topK: 40,
-      maxOutputTokens: 8192,
+    const { messages = [], dataContext = "", stream: wantStream = false } = await req.json();
+
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "messages inválido" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const payload = {
+      model: "google/gemini-2.5-flash",
+      messages: toOpenAIMessages(messages, dataContext),
+      temperature: 0.4,
+      stream: Boolean(wantStream),
+      response_format: { type: "text" },
     };
 
-    // --- STREAMING MODE ---
+    // Streaming mode (SSE)
     if (wantStream) {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${GOOGLE_API_KEY}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents, generationConfig }),
-        }
-      );
+      const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Gemini stream error:", response.status, errorText);
-        if (response.status === 429) {
-          return new Response(
-            JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos." }),
-            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        return new Response(
-          JSON.stringify({ error: `Erro na API do Google AI: ${response.status}` }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      if (!upstream.ok || !upstream.body) {
+        const err = await upstream.text();
+        console.error("Lovable AI gateway stream error:", upstream.status, err);
+        return sseDoneResponse(buildFallbackText(messages));
       }
 
-      // Pipe the SSE stream through, extracting text chunks
-      const reader = response.body!.getReader();
+      const reader = upstream.body.getReader();
       const encoder = new TextEncoder();
       const decoder = new TextDecoder();
 
@@ -97,18 +149,18 @@ Você pode:
                 const line = buffer.slice(0, newlineIdx).trim();
                 buffer = buffer.slice(newlineIdx + 1);
 
-                if (!line.startsWith("data: ")) continue;
-                const jsonStr = line.slice(6).trim();
+                if (!line.startsWith("data:")) continue;
+                const jsonStr = line.replace(/^data:\s*/, "");
                 if (jsonStr === "[DONE]") continue;
 
                 try {
                   const parsed = JSON.parse(jsonStr);
-                  const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
-                  if (text) {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: text })}\n\n`));
+                  const token = parsed?.choices?.[0]?.delta?.content ?? "";
+                  if (token) {
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
                   }
                 } catch {
-                  // partial JSON, ignore
+                  // ignore partial chunks
                 }
               }
             }
@@ -122,37 +174,36 @@ Você pode:
       });
 
       return new Response(readable, {
-        headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
       });
     }
 
-    // --- NON-STREAMING MODE (for auto-summary / predictive) ---
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents, generationConfig }),
-      }
-    );
+    // Non-stream mode (used by hybrid classification)
+    const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      },
+      body: JSON.stringify(payload),
+    });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Google AI Studio error:", response.status, errorText);
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+    if (!upstream.ok) {
+      const err = await upstream.text();
+      console.error("Lovable AI gateway error:", upstream.status, err);
       return new Response(
-        JSON.stringify({ error: `Erro na API do Google AI: ${response.status}` }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ response: buildFallbackText(messages), fallback: true }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "Sem resposta do modelo.";
+    const data = await upstream.json();
+    const text = data?.choices?.[0]?.message?.content || "Sem resposta do modelo.";
 
     return new Response(
       JSON.stringify({ response: text }),
