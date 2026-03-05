@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useRef } from "react";
+import { PredictiveAnalysis } from "./PredictiveAnalysis";
 import { 
   FileDown, Loader2, BarChart3, PieChart, TrendingUp, 
   Hash, Calendar, Tag, Users, Database, Layers, FileCode,
@@ -835,6 +836,11 @@ export function DashboardView({ dataset, personFilter, statusFilter, teamFilter,
             ))}
           </div>
         </ChartCard>
+      </div>
+
+      {/* Predictive Analysis */}
+      <div className="px-6 pb-6">
+        <PredictiveAnalysis dataset={dataset} />
       </div>
     </div>
   );
