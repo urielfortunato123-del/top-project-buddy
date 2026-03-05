@@ -65,6 +65,22 @@
     --shadow-card: 0 8px 24px rgba(0,0,0,0.35);
     --radius-card: 0.875rem;
     --radius-input: 0.625rem;
+
+    /* Status tokens */
+    --status-ent-bg: 142 71% 45%;
+    --status-ent-fg: 0 0% 100%;
+    --status-fol-bg: 0 72% 51%;
+    --status-fol-fg: 0 0% 100%;
+    --status-ban-bg: 217 91% 60%;
+    --status-ban-fg: 0 0% 100%;
+    --status-fal-bg: 37 91% 55%;
+    --status-fal-fg: 0 0% 100%;
+    --status-ate-bg: 271 81% 56%;
+    --status-ate-fg: 0 0% 100%;
+    --status-fer-bg: 190 90% 50%;
+    --status-fer-fg: 0 0% 100%;
+    --status-empty-bg: 222 47% 20%;
+    --status-empty-fg: 215 20% 55%;
   }
 
   /* ===== PRESET: Apple Clean (macOS/iOS) ===== */
@@ -128,6 +144,22 @@
     --shadow-card: 0 10px 30px rgba(17,24,39,0.08);
     --radius-card: 1.25rem;
     --radius-input: 999px;
+
+    /* Status tokens */
+    --status-ent-bg: 142 69% 92%;
+    --status-ent-fg: 142 69% 30%;
+    --status-fol-bg: 1 100% 93%;
+    --status-fol-fg: 1 100% 40%;
+    --status-ban-bg: 211 100% 93%;
+    --status-ban-fg: 211 100% 35%;
+    --status-fal-bg: 36 100% 92%;
+    --status-fal-fg: 36 100% 35%;
+    --status-ate-bg: 280 70% 93%;
+    --status-ate-fg: 280 70% 35%;
+    --status-fer-bg: 190 90% 92%;
+    --status-fer-fg: 190 90% 30%;
+    --status-empty-bg: 240 5% 93%;
+    --status-empty-fg: 222 10% 55%;
   }
 
   /* Dark mode for Apple preset — premium dark like macOS Sonoma */
@@ -189,6 +221,22 @@
     --shadow-card: 0 8px 32px rgba(0,0,0,0.45);
     --radius-card: 1.25rem;
     --radius-input: 999px;
+
+    /* Status tokens (dark) */
+    --status-ent-bg: 142 69% 20%;
+    --status-ent-fg: 142 69% 70%;
+    --status-fol-bg: 1 100% 20%;
+    --status-fol-fg: 1 100% 70%;
+    --status-ban-bg: 211 100% 20%;
+    --status-ban-fg: 211 100% 70%;
+    --status-fal-bg: 36 100% 20%;
+    --status-fal-fg: 36 100% 70%;
+    --status-ate-bg: 280 70% 20%;
+    --status-ate-fg: 280 70% 70%;
+    --status-fer-bg: 190 90% 20%;
+    --status-fer-fg: 190 90% 70%;
+    --status-empty-bg: 230 15% 18%;
+    --status-empty-fg: 220 10% 50%;
   }
 }
 
