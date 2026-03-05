@@ -130,35 +130,65 @@
     --radius-input: 999px;
   }
 
-  /* Dark mode override for Apple preset */
-  .dark[data-theme-preset="apple"],
-  .dark :root[data-theme-preset="apple"] {
-    --background: 222 47% 6%;
-    --foreground: 210 40% 98%;
+  /* Dark mode for Apple preset — premium dark like macOS Sonoma */
+  .dark[data-theme-preset="apple"] {
+    --background: 230 15% 8%;
+    --foreground: 220 13% 91%;
 
-    --card: 222 47% 9%;
-    --card-foreground: 210 40% 98%;
+    --card: 230 15% 11%;
+    --card-foreground: 220 13% 91%;
 
-    --popover: 222 47% 11%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 230 15% 13%;
+    --popover-foreground: 220 13% 91%;
 
-    --muted: 222 47% 14%;
-    --muted-foreground: 215 20% 55%;
+    --primary: 211 100% 50%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 222 47% 14%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 230 15% 16%;
+    --secondary-foreground: 220 13% 91%;
 
-    --border: 222 47% 16%;
-    --input: 222 47% 14%;
+    --muted: 230 15% 15%;
+    --muted-foreground: 220 10% 50%;
 
-    --sidebar-background: 222 47% 5%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-accent: 222 47% 12%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 222 47% 16%;
-    --sidebar-muted: 215 20% 55%;
+    --accent: 211 100% 50%;
+    --accent-foreground: 0 0% 100%;
 
-    --shadow-card: 0 8px 24px rgba(0,0,0,0.35);
+    --destructive: 1 100% 61%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 69% 50%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 36 100% 53%;
+    --warning-foreground: 0 0% 100%;
+
+    --info: 211 100% 50%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 230 15% 18%;
+    --input: 230 15% 15%;
+    --ring: 211 100% 50%;
+
+    --sidebar-background: 230 15% 6%;
+    --sidebar-foreground: 220 13% 91%;
+    --sidebar-primary: 211 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 230 15% 13%;
+    --sidebar-accent-foreground: 220 13% 91%;
+    --sidebar-border: 230 15% 18%;
+    --sidebar-muted: 220 10% 50%;
+    --sidebar-ring: 211 100% 50%;
+
+    --chart-1: 211 100% 55%;
+    --chart-2: 142 69% 55%;
+    --chart-3: 36 100% 58%;
+    --chart-4: 1 90% 65%;
+    --chart-5: 280 70% 65%;
+    --chart-6: 190 90% 55%;
+
+    --shadow-card: 0 8px 32px rgba(0,0,0,0.45);
+    --radius-card: 1.25rem;
+    --radius-input: 999px;
   }
 }
 
