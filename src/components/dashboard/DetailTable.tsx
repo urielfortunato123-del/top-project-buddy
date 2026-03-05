@@ -13,30 +13,29 @@ interface DetailTableProps {
 }
 
 const statusColors: Record<string, { bg: string; text: string }> = {
-  ENTREGUE: { bg: "bg-primary/20", text: "text-primary" },
-  ENT: { bg: "bg-primary/20", text: "text-primary" },
-  FOLGA: { bg: "bg-red-100", text: "text-red-700" },
-  FOL: { bg: "bg-red-100", text: "text-red-700" },
-  "BANCO DE HORAS": { bg: "bg-blue-100", text: "text-blue-700" },
-  BANCO: { bg: "bg-blue-100", text: "text-blue-700" },
-  BAN: { bg: "bg-blue-100", text: "text-blue-700" },
-  FALTA: { bg: "bg-orange-100", text: "text-orange-700" },
-  FAL: { bg: "bg-orange-100", text: "text-orange-700" },
-  ATESTADO: { bg: "bg-purple-100", text: "text-purple-700" },
-  ATE: { bg: "bg-purple-100", text: "text-purple-700" },
-  FÉRIAS: { bg: "bg-cyan-100", text: "text-cyan-700" },
-  FERIAS: { bg: "bg-cyan-100", text: "text-cyan-700" },
-  FER: { bg: "bg-cyan-100", text: "text-cyan-700" },
+  ENTREGUE: { bg: "bg-[hsl(var(--status-ent-bg))]", text: "text-[hsl(var(--status-ent-fg))]" },
+  ENT: { bg: "bg-[hsl(var(--status-ent-bg))]", text: "text-[hsl(var(--status-ent-fg))]" },
+  FOLGA: { bg: "bg-[hsl(var(--status-fol-bg))]", text: "text-[hsl(var(--status-fol-fg))]" },
+  FOL: { bg: "bg-[hsl(var(--status-fol-bg))]", text: "text-[hsl(var(--status-fol-fg))]" },
+  "BANCO DE HORAS": { bg: "bg-[hsl(var(--status-ban-bg))]", text: "text-[hsl(var(--status-ban-fg))]" },
+  BANCO: { bg: "bg-[hsl(var(--status-ban-bg))]", text: "text-[hsl(var(--status-ban-fg))]" },
+  BAN: { bg: "bg-[hsl(var(--status-ban-bg))]", text: "text-[hsl(var(--status-ban-fg))]" },
+  FALTA: { bg: "bg-[hsl(var(--status-fal-bg))]", text: "text-[hsl(var(--status-fal-fg))]" },
+  FAL: { bg: "bg-[hsl(var(--status-fal-bg))]", text: "text-[hsl(var(--status-fal-fg))]" },
+  ATESTADO: { bg: "bg-[hsl(var(--status-ate-bg))]", text: "text-[hsl(var(--status-ate-fg))]" },
+  ATE: { bg: "bg-[hsl(var(--status-ate-bg))]", text: "text-[hsl(var(--status-ate-fg))]" },
+  "FÉRIAS": { bg: "bg-[hsl(var(--status-fer-bg))]", text: "text-[hsl(var(--status-fer-fg))]" },
+  FERIAS: { bg: "bg-[hsl(var(--status-fer-bg))]", text: "text-[hsl(var(--status-fer-fg))]" },
+  FER: { bg: "bg-[hsl(var(--status-fer-bg))]", text: "text-[hsl(var(--status-fer-fg))]" },
 };
 
 function getStatusColor(status: string) {
   const normalized = String(status || "").trim().toUpperCase();
-  return statusColors[normalized] || { bg: "bg-gray-100", text: "text-gray-600" };
+  return statusColors[normalized] || { bg: "bg-[hsl(var(--status-empty-bg))]", text: "text-[hsl(var(--status-empty-fg))]" };
 }
 
 function formatDate(value: string): string {
   if (!value) return "-";
-  // Se já está no formato YYYY-MM-DD, converte para DD/MM
   if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
     const [y, m, d] = value.slice(0, 10).split("-");
     return `${d}/${m}`;
@@ -45,7 +44,6 @@ function formatDate(value: string): string {
 }
 
 export function DetailTable({ rows, dateColumn, personColumn, teamColumn, statusColumn }: DetailTableProps) {
-  // Ordena por data (mais recente primeiro) e limita a 500 linhas para performance
   const sortedRows = useMemo(() => {
     return [...rows]
       .sort((a, b) => {
@@ -66,15 +64,15 @@ export function DetailTable({ rows, dateColumn, personColumn, teamColumn, status
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-3 py-2 border-b bg-gray-50 flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+      <div className="px-3 py-2 border-b bg-muted/50 flex items-center justify-between">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
           Detalhes ({rows.length > 500 ? `500 de ${rows.length}` : rows.length})
         </h3>
       </div>
 
       <ScrollArea className="flex-1">
         <Table>
-          <TableHeader className="sticky top-0 bg-white z-10">
+          <TableHeader className="sticky top-0 bg-card z-10">
             <TableRow>
               <TableHead className="w-[80px] text-xs">Data</TableHead>
               <TableHead className="text-xs">Pessoa</TableHead>
@@ -88,7 +86,10 @@ export function DetailTable({ rows, dateColumn, personColumn, teamColumn, status
               const statusColor = getStatusColor(status);
 
               return (
-                <TableRow key={row._rowIndex ?? idx} className="hover:bg-muted/30">
+                <TableRow 
+                  key={row._rowIndex ?? idx} 
+                  className={`hover:bg-muted/40 transition-colors ${idx % 2 === 0 ? '' : 'bg-muted/10'}`}
+                >
                   <TableCell className="text-xs py-1.5 font-mono">
                     {formatDate(String(row[dateColumn] || ""))}
                   </TableCell>
